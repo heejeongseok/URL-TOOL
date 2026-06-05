@@ -91,7 +91,7 @@ export const AREA_EN = {
 // PC: F열 번호, MO: M열 번호
 export async function fetchLastKidNums() {
   try {
-    const res = await fetch(`${GAS_URL}?action=getLastKidNums`);
+    const res = await fetch(`${GAS_URL}?action=getLastKidNums`, { redirect: 'follow' });
     const data = await res.json();
     return { pc: data.pc, mo: data.mo };
   } catch {
@@ -153,7 +153,7 @@ export async function appendKeywords(rows) {
 // 반환 예시: { 'PC|구사명|범용': 'IFA', 'MO|신사명|보종': 'CIR', ... }
 export async function fetchSettings() {
   try {
-    const res = await fetch(`${GAS_URL}?action=getSettings`);
+    const res = await fetch(`${GAS_URL}?action=getSettings`, { redirect: 'follow' });
     const data = await res.json();
     if (data.codeMap) return data.codeMap;
     return null;
@@ -173,9 +173,8 @@ export function getKidCode(codeMap, dev, grp, bj) {
 // PC: B열=이름, D열=URL / MO: G열=이름, H열=URL
 export async function fetchLandingUrlIndex() {
   try {
-    const res = await fetch(`${GAS_URL}?action=getLandingUrlIndex`);
+    const res = await fetch(`${GAS_URL}?action=getLandingUrlIndex`, { redirect: 'follow' });
     const data = await res.json();
-    // data = { PC: { '메인': 'https://...', ... }, MO: { ... } }
     if (data.PC && data.MO) return data;
     return null;
   } catch {
