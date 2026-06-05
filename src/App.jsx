@@ -298,16 +298,6 @@ function Step2({ rows1 }) {
         <input id="eka-file" type="file" accept=".csv,.xlsx" style={{display:'none'}} onChange={e=>e.target.files[0]&&handleEkaFile(e.target.files[0])}/>
       </div>
 
-      {(!rows1?.length) && (
-        <div className="card">
-          <div className="card-title">소재명 목록 & 키워드ID</div>
-          <textarea value={searchNames} onChange={e=>setSearchNames(e.target.value)} rows={5} placeholder={'네이버MO_구사명_범용_전기차_260507_홈링크\n...'}/>
-          <div className="grid2" style={{marginTop:'.75rem'}}>
-            <div className="form-group"><label>PC 키워드ID 시작번호</label><input type="number" value={kidPcStart} onChange={e=>setKidPcStart(e.target.value)} placeholder="예: 8690"/></div>
-            <div className="form-group"><label>MO 키워드ID 시작번호</label><input type="number" value={kidMoStart} onChange={e=>setKidMoStart(e.target.value)} placeholder="예: 10288"/></div>
-          </div>
-        </div>
-      )}
       {rows1?.length>0&&<div className="info-box">✓ 1단계에서 생성된 {rows1.length}개 행 자동 연결됨</div>}
 
       <button className="btn btn-primary btn-lg" onClick={generate}>⬇ 최종 URL 엑셀 다운로드</button>
