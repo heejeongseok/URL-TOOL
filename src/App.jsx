@@ -25,9 +25,10 @@ function downloadEkaCsv(rows, fileName) {
     ['광고상품','검색어','연결URL'],
     ...rows.map(r => ['네이버(브랜드검색)', r.searchName, r.baseUrl])
   ];
-  const csv = lines.map(row => row.join(',')).join('
-');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const csv = lines.map(row => row.join(',')).join(String.fromCharCode(13,10));
+  const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+  const enc = new TextEncoder().encode(csv);
+  const blob = new Blob([bom, enc], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = fileName; a.click();
