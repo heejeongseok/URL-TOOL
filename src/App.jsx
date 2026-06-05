@@ -28,10 +28,9 @@ function downloadEkaCsv(rows, fileName) {
     ...rows.map(r => ['네이버(브랜드검색)', r.searchName, r.baseUrl])
   ];
   const csv = lines.map(row => row.join(',')).join('\r\n');
-  const unicodeArray = Encoding.stringToCode(csv);
-  const cp949Array = Encoding.convert(unicodeArray, { to: 'SJIS', from: 'UNICODE' });
-  const uint8 = new Uint8Array(cp949Array);
-  const blob = new Blob([uint8], { type: 'text/csv;charset=euc-kr;' });
+  // BOM 있는 UTF-8 — 에카 업로드 시 한글 정상 표시
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = fileName; a.click();
