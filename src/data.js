@@ -18,42 +18,8 @@ export const TEMPLATES = {
 
 export const LANDING_OPTIONS = ['메인','산출페이지','운전자보험','펫보험','갱신','이륜차','원데이','화물차','법인차','한문철','박수석님TM','자사TM','실손보험','결제혜택','이벤트'];
 
-export const LANDING_URL = {
-  PC: {
-    '메인': 'https://www.directdb.co.kr/mainView.do?',
-    '산출페이지': 'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '운전자보험': 'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '펫보험': 'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '갱신': 'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?isRenew=Y&',
-    '이륜차': 'https://www.directdb.co.kr/at/prd/mtcc/step1/formStepPreView.do?',
-    '원데이': 'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '화물차': 'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '법인차': 'https://www.directdb.co.kr/copr/atarc/step1/formStepPreView.do?',
-    '한문철': 'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '박수석님TM': '1566-0015',
-    '자사TM': '1566-0015',
-    '실손보험': 'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '결제혜택': 'https://www.directdb.co.kr/evt/benefit/benefitView.do?',
-    '이벤트': 'https://db-direct.co.kr/event/2024_sa?',
-  },
-  MO: {
-    '메인': 'https://m.directdb.co.kr/mainView.do?',
-    '산출페이지': 'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '운전자보험': 'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '펫보험': 'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '갱신': 'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?isRenew=Y&',
-    '이륜차': 'https://m.directdb.co.kr/at/prd/mtcc/step1/formStepPreView.do?',
-    '원데이': 'https://m.directdb.co.kr/at/prd/ondy/step1/formStepPreView.do?',
-    '화물차': 'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?pdcDvcd=buss&',
-    '법인차': 'https://m.directdb.co.kr/copr/atarc/step1/formStepPreView.do?',
-    '한문철': 'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '박수석님TM': '1566-0015',
-    '자사TM': '1566-0015',
-    '실손보험': 'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?',
-    '결제혜택': 'https://m.directdb.co.kr/evt/benefit/benefitView.do?',
-    '이벤트': 'https://m.db-direct.co.kr/event/2024_sa?',
-  }
-};
+// LANDING_URL은 더 이상 하드코딩하지 않음.
+// 구글 시트 <랜딩URL인덱스>에서 동적으로 로드됨 (fetchLandingUrlIndex 참조)
 
 // ★ 범용/보종 구분된 기본 랜딩
 export const DEFAULT_LANDING = {
@@ -121,7 +87,8 @@ export const AREA_EN = {
   버튼1:'button_1', 버튼2:'button_2', 버튼3:'button_3',
 };
 
-// 구글 시트에서 마지막 키워드ID 번호 가져오기
+// [키워드ID] 시트에서 PC/MO 마지막 번호 가져오기
+// PC: F열 번호, MO: M열 번호
 export async function fetchLastKidNums() {
   try {
     const res = await fetch(`${GAS_URL}?action=getLastKidNums`);
@@ -132,12 +99,48 @@ export async function fetchLastKidNums() {
   }
 }
 
-// 구글 시트에 키워드ID 누적 저장
+// [키워드ID] 시트에 누적 저장
+// 1) GAS에서 PC/MO 마지막 번호를 가져와 +1부터 번호 부여
+// 2) rows에 kidVal 확정 후 시트에 저장
+// PC: B(날짜) C(소재명) D(키워드ID) E(코드) F(번호)
+// MO: H(날짜) I(소재명) J(영역명) K(키워드ID) L(코드) M(번호)
 export async function appendKeywords(rows) {
+  // 마지막 번호 가져오기
+  const { pc: lastPc, mo: lastMo } = await fetchLastKidNums();
+  let kidPc = (lastPc ?? 9000) + 1;
+  let kidMo = (lastMo ?? 11000) + 1;
+
+  // rows에 kidVal 확정
+  rows.forEach(r => {
+    if (r.dev === 'PC') r.kidVal = `${r.kidCode}${kidPc++}`;
+    else                r.kidVal = `${r.kidCode}${kidMo++}`;
+  });
+
+  const pcRows = rows
+    .filter(r => r.dev === 'PC')
+    .map(r => ({
+      date: r.date,
+      searchName: r.searchName,
+      kidVal: r.kidVal,
+      code: r.kidCode,
+      num: parseInt(r.kidVal.replace(r.kidCode, '')),
+    }));
+
+  const moRows = rows
+    .filter(r => r.dev === 'MO')
+    .map(r => ({
+      date: r.date,
+      searchName: r.searchName,
+      area: r.area,
+      kidVal: r.kidVal,
+      code: r.kidCode,
+      num: parseInt(r.kidVal.replace(r.kidCode, '')),
+    }));
+
   try {
     const res = await fetch(GAS_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'appendKeywords', rows }),
+      body: JSON.stringify({ action: 'appendKeywords', pcRows, moRows }),
     });
     return await res.json();
   } catch (e) {
@@ -145,31 +148,70 @@ export async function appendKeywords(rows) {
   }
 }
 
+// [설정] 시트에서 기기+구신사명+범용보종 → 코드값 맵 가져오기
+// B(기기) C(구-신사명) D(범용-보종) E(코드값), 4행부터
+// 반환 예시: { 'PC|구사명|범용': 'IFA', 'MO|신사명|보종': 'CIR', ... }
+export async function fetchSettings() {
+  try {
+    const res = await fetch(`${GAS_URL}?action=getSettings`);
+    const data = await res.json();
+    if (data.codeMap) return data.codeMap;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// 코드맵에서 코드 찾기 헬퍼
+export function getKidCode(codeMap, dev, grp, bj) {
+  // dev: 'PC'|'MO', grp: '구사명'|'신사명'|'이륜차' 등, bj: '범용'|'보종'
+  const key = `${dev}|${grp}|${bj}`;
+  return codeMap?.[key] || null;
+}
+
+// 구글 시트 <랜딩URL인덱스>에서 PC/MO 랜딩URL 맵 가져오기
+// PC: B열=이름, D열=URL / MO: G열=이름, H열=URL
+export async function fetchLandingUrlIndex() {
+  try {
+    const res = await fetch(`${GAS_URL}?action=getLandingUrlIndex`);
+    const data = await res.json();
+    // data = { PC: { '메인': 'https://...', ... }, MO: { ... } }
+    if (data.PC && data.MO) return data;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // URL 빌드
-export function buildRows({ sojae, date, bujong, pcTpl, moTpl, landingPC, landingMO, kidPcStart, kidMoStart }) {
+// kidPcStart/kidMoStart는 appendKeywords에서 GAS로부터 받아 처리
+// buildRows는 kidNum 없이 행을 만들고, appendKeywords가 번호를 붙임
+export function buildRows({ sojae, date, bujong, pcTpl, moTpl, landingPC, landingMO, landingUrlIndex, codeMap }) {
   const cfg = BUJONG_CFG[bujong];
   const pcAreas = TEMPLATES.PC[pcTpl] || [];
   const moAreas = TEMPLATES.MO[moTpl] || [];
-  let kidPc = kidPcStart;
-  let kidMo = kidMoStart;
   const rows = [];
+
+  const pcIndex = landingUrlIndex?.PC || {};
+  const moIndex = landingUrlIndex?.MO || {};
 
   for (const g of cfg.groups) {
     if (!pcAreas.length) continue;
+    const pcCode = getKidCode(codeMap, 'PC', g.grp, g.bj) || g.kid_pre;
     for (const area of pcAreas) {
       const landing = landingPC[g.bj]?.[area] || '산출페이지';
-      const baseUrl = LANDING_URL.PC[landing] || LANDING_URL.PC['산출페이지'];
-      const kidVal = `${g.kid_pre}${kidPc++}`;
-      rows.push({ dev:'PC', grp:g.grp, bj:g.bj, sojae, date, area, areaEn:AREA_EN[area]||area, landing, baseUrl, searchName:`네이버PC_${g.grp}_${g.bj}_${sojae}_${date}_${area}`, kidVal, ptnr:g.ptnr_pc, grpEn:g.grp_en_pc, utmBj:g.utm_bj });
+      const baseUrl = pcIndex[landing] || pcIndex['산출페이지'] || '';
+      // kidVal은 appendKeywords에서 번호 확정 후 채움 — 일단 코드만
+      rows.push({ dev:'PC', grp:g.grp, bj:g.bj, sojae, date, area, areaEn:AREA_EN[area]||area, landing, baseUrl, searchName:`네이버PC_${g.grp}_${g.bj}_${sojae}_${date}_${area}`, kidCode:pcCode, kidVal:'', ptnr:g.ptnr_pc, grpEn:g.grp_en_pc, utmBj:g.utm_bj });
     }
   }
   for (const g of cfg.groups) {
     if (!moAreas.length) continue;
+    const moCode = getKidCode(codeMap, 'MO', g.grp, g.bj) || g.kid_pre;
     for (const area of moAreas) {
       const landing = landingMO[g.bj]?.[area] || '산출페이지';
-      const baseUrl = LANDING_URL.MO[landing] || LANDING_URL.MO['산출페이지'];
-      const kidVal = `${g.kid_pre}${kidMo++}`;
-      rows.push({ dev:'MO', grp:g.grp, bj:g.bj, sojae, date, area, areaEn:AREA_EN[area]||area, landing, baseUrl, searchName:`네이버MO_${g.grp}_${g.bj}_${sojae}_${date}_${area}`, kidVal, ptnr:g.ptnr_mo, grpEn:g.grp_en_mo, utmBj:g.utm_bj });
+      const baseUrl = moIndex[landing] || moIndex['산출페이지'] || '';
+      rows.push({ dev:'MO', grp:g.grp, bj:g.bj, sojae, date, area, areaEn:AREA_EN[area]||area, landing, baseUrl, searchName:`네이버MO_${g.grp}_${g.bj}_${sojae}_${date}_${area}`, kidCode:moCode, kidVal:'', ptnr:g.ptnr_mo, grpEn:g.grp_en_mo, utmBj:g.utm_bj });
     }
   }
   return rows;
