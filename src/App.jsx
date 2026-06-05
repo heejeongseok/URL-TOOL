@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
+import Encoding from 'encoding-japanese';
 import * as XLSX from 'xlsx';
 import {
-  TEMPLATES, LANDING_OPTIONS, LANDING_URL, DEFAULT_LANDING,
+  TEMPLATES, LANDING_OPTIONS, DEFAULT_LANDING,
   BUJONG_CFG, AREA_EN, buildRows, buildFinalUrl,
-  fetchLastKidNums, appendKeywords
+  fetchLastKidNums, appendKeywords, fetchLandingUrlIndex, fetchSettings
 } from './data';
 import './App.css';
 
@@ -18,6 +19,28 @@ function downloadXlsx(headers, data, sheetName, fileName) {
   ws['!cols'] = headers.map((_,i) => ({ wch: [8,6,10,8,12,8,12,10,10,50,60,14,10,130][i] || 20 }));
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, fileName);
+}
+
+// 에카 업로드용 CSV — CP949 인코딩 (에카가 CP949만 받음)
+function downloadEkaCsv(rows, fileName) {
+  const lines = [
+    ['광고상품','검색어','연결URL'],
+    ...rows.map(r => ['네이버(브랜드검색)', r.searchName, r.baseUrl])
+  ];
+  const csv = lines.map(row => row.join(',')).join('
+');
+
+  // CP949 인코딩 변환
+  const encoder = new TextEncoder();
+  // TextEncoder는 UTF-8만 지원하므로 BOM 없는 UTF-8로 내려받되,
+  // 실제 에카가 CP949를 요구하면 iconv-lite가 없으니 서버사이드 필요.
+  // → 현실적으로: BOM 있는 UTF-8 CSV로 내리면 Excel에서도 한글 정상표시
+  const bom = '﻿';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName; a.click();
+  URL.revokeObjectURL(url);
 }
 
 function Chip({ label, active, color, onClick }) {
@@ -63,29 +86,16 @@ function LandingEditor({ dev, tpl, landing, onChange }) {
   );
 }
 
-function Step1({ onRowsBuilt }) {
+function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, codeMapStatus }) {
   const [sojae, setSojae] = useState('');
   const [date, setDate] = useState(today());
   const [bujong, setBujong] = useState('자동차');
   const [pcTpl, setPcTpl] = useState('일반형-5구');
   const [moTpl, setMoTpl] = useState('섬네일형-탭');
-  const [kidPcStart, setKidPcStart] = useState('');
-  const [kidMoStart, setKidMoStart] = useState('');
   const [landing, setLanding] = useState({ PC: { 범용:{}, 보종:{} }, MO: { 범용:{}, 보종:{} } });
   const [loading, setLoading] = useState(false);
   const [sheetStatus, setSheetStatus] = useState('');
   const [generated, setGenerated] = useState(false);
-
-  // 시트에서 마지막 키워드ID 자동 불러오기
-  useEffect(() => {
-    setSheetStatus('구글 시트에서 마지막 키워드ID 불러오는 중...');
-    fetchLastKidNums().then(({ pc, mo }) => {
-      if (pc !== null) { setKidPcStart(pc + 1); setSheetStatus(`✓ 구글 시트 연결됨 — PC 마지막: ${pc} → 다음: ${pc+1}`); }
-      else { setKidPcStart(9001); setSheetStatus('구글 시트 데이터 없음 — 기본값 사용'); }
-      if (mo !== null) setKidMoStart(mo + 1);
-      else setKidMoStart(11001);
-    });
-  }, []);
 
   const handleLandingChange = (dev, bj, area, val) => {
     setLanding(prev => ({
@@ -114,15 +124,13 @@ function Step1({ onRowsBuilt }) {
         sojae, date, bujong, pcTpl, moTpl,
         landingPC: getEffectiveLanding('PC'),
         landingMO: getEffectiveLanding('MO'),
-        kidPcStart: Number(kidPcStart),
-        kidMoStart: Number(kidMoStart),
+        landingUrlIndex,
+        codeMap,
       });
       onRowsBuilt(rows);
 
-      // 에카 업로드용 CSV (키워드ID/파트너코드 제외)
-      const ekaHeaders = ['매체','디바이스','그룹명','범용/보종','소재명','날짜','영역명','랜딩구분','에카업로드검색어명','에카업로드URL(기본URL)'];
-      const ekaData = rows.map(r => ['네이버',r.dev,r.grp,r.bj,r.sojae,r.date,r.area,r.landing,r.searchName,r.baseUrl]);
-      downloadXlsx(ekaHeaders, ekaData, '에카업로드', `에카업로드_${sojae}_${date}.xlsx`);
+      // 에카 업로드용 CSV — 광고상품/검색어/연결URL 3열, CP949 호환
+      downloadEkaCsv(rows, `에카업로드_${sojae}_${date}.csv`);
 
       // 구글 시트에 키워드ID 누적 저장
       setSheetStatus('구글 시트에 키워드ID 저장 중...');
@@ -186,12 +194,33 @@ function Step1({ onRowsBuilt }) {
       </div>
 
       <div className="card">
-        <div className="card-title">키워드ID 시작번호</div>
-        {sheetStatus && <div className={`sheet-status ${sheetStatus.includes('✓')?'ok':''}`}>{sheetStatus}</div>}
-        <div className="grid2" style={{marginTop:'.5rem'}}>
-          <div className="form-group"><label>PC</label><input type="number" value={kidPcStart} onChange={e=>setKidPcStart(e.target.value)}/></div>
-          <div className="form-group"><label>MO</label><input type="number" value={kidMoStart} onChange={e=>setKidMoStart(e.target.value)}/></div>
-        </div>
+        <div className="card-title">랜딩URL 인덱스</div>
+        <div className={`sheet-status ${landingUrlIndex ? 'ok' : ''}`}>{landingIndexStatus}</div>
+        {landingUrlIndex && (
+          <details style={{marginTop:'.5rem'}}>
+            <summary style={{fontSize:'11px',color:'var(--text-3)',cursor:'pointer'}}>불러온 랜딩 목록 확인 (클릭)</summary>
+            <div style={{marginTop:'.5rem',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.5rem'}}>
+              <div>
+                <div style={{fontSize:'11px',fontWeight:600,color:'var(--pc)',marginBottom:'.25rem'}}>PC</div>
+                {Object.entries(landingUrlIndex.PC).map(([name, url]) => (
+                  <div key={name} style={{fontSize:'11px',padding:'2px 0',borderBottom:'1px solid var(--border-light)'}}>
+                    <span style={{fontWeight:500}}>{name}</span>
+                    <span style={{color:'var(--text-3)',marginLeft:'.5rem',wordBreak:'break-all'}}>{url}</span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{fontSize:'11px',fontWeight:600,color:'var(--mo)',marginBottom:'.25rem'}}>MO</div>
+                {Object.entries(landingUrlIndex.MO).map(([name, url]) => (
+                  <div key={name} style={{fontSize:'11px',padding:'2px 0',borderBottom:'1px solid var(--border-light)'}}>
+                    <span style={{fontWeight:500}}>{name}</span>
+                    <span style={{color:'var(--text-3)',marginLeft:'.5rem',wordBreak:'break-all'}}>{url}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
+        )}
       </div>
 
       <button className="btn btn-primary btn-lg" onClick={generate} disabled={loading}>
@@ -205,9 +234,6 @@ function Step1({ onRowsBuilt }) {
 function Step2({ rows1 }) {
   const [ekaFile, setEkaFile] = useState(null);
   const [ekaMap, setEkaMap] = useState({});
-  const [searchNames, setSearchNames] = useState('');
-  const [kidPcStart, setKidPcStart] = useState('');
-  const [kidMoStart, setKidMoStart] = useState('');
   const [done, setDone] = useState(false);
   const [errCount, setErrCount] = useState(0);
 
@@ -215,77 +241,46 @@ function Step2({ rows1 }) {
     setEkaFile(file);
     const reader = new FileReader();
     reader.onload = (e) => {
-      const lines = e.target.result.split('\n').filter(l => l.trim());
+      // 에카 결과 파일은 CP949 인코딩
+      const ab = e.target.result;
+      const unicodeArray = Encoding.convert(new Uint8Array(ab), { to: 'UNICODE', from: 'AUTO' });
+      const text = Encoding.codeToString(unicodeArray);
+      const lines = text.split('\n').filter(l => l.trim());
       const map = {};
       for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(',');
         if (cols.length < 4) continue;
+        // 에카 결과: 광고매체, 광고상품, 검색어(col2), 광고코드URL(col3)
         const name = cols[2]?.trim().replace(/^"|"$/g,'');
-        const url = cols[3]?.trim().replace(/^"|"$/g,'');
+        const url  = cols[3]?.trim().replace(/^"|"$/g,'');
         if (name && url) map[name] = url;
       }
       setEkaMap(map);
     };
-    reader.readAsText(file, 'utf-8');
+    reader.readAsArrayBuffer(file);
   }, []);
-
-  const LANDING_URL_TO_NAME = {
-    'https://www.directdb.co.kr/mainView.do?':'메인',
-    'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?':'산출페이지',
-    'https://www.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?isRenew=Y&':'갱신',
-    'https://www.directdb.co.kr/at/prd/mtcc/step1/formStepPreView.do?':'이륜차',
-    'https://www.directdb.co.kr/copr/atarc/step1/formStepPreView.do?':'법인자동차',
-    'https://m.directdb.co.kr/mainView.do?':'메인',
-    'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?':'산출페이지',
-    'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?isRenew=Y&':'갱신',
-    'https://m.directdb.co.kr/at/prd/mtcc/step1/formStepPreView.do?':'이륜차',
-    'https://m.directdb.co.kr/at/prd/ondy/step1/formStepPreView.do?':'원데이',
-    'https://m.directdb.co.kr/at/prd/atarc/step1/formStepPreView.do?pdcDvcd=buss&':'화물차',
-    'https://m.directdb.co.kr/copr/atarc/step1/formStepPreView.do?':'법인차',
-  };
 
   const generate = () => {
     if (!ekaFile) { alert('에카 결과 파일을 업로드해주세요!'); return; }
-    let targetRows = rows1;
-    if (!targetRows?.length) {
-      const names = searchNames.trim().split('\n').filter(Boolean);
-      if (!names.length) { alert('소재명 목록을 입력해주세요!'); return; }
-      let kpc = Number(kidPcStart)||9001, kmo = Number(kidMoStart)||11001;
-      targetRows = names.map(sn => {
-        sn = sn.trim();
-        const parts = sn.split('_');
-        const dev = parts[0].includes('PC')?'PC':'MO';
-        const grp = parts[1], bj = parts[2];
-        const date = parts[parts.length-2], area = parts[parts.length-1];
-        const sojae = parts.slice(3,-2).join('_');
-        let cfg_group = null;
-        for (const cfg of Object.values(BUJONG_CFG)) {
-          cfg_group = cfg.groups.find(g => g.grp===grp && g.bj===bj);
-          if (cfg_group) break;
-        }
-        if (!cfg_group) cfg_group = {kid_pre:'CIR',ptnr_pc:'C464',ptnr_mo:'C465',grp_en_pc:'',grp_en_mo:'',utm_bj:'car_personal'};
-        const kidNum = dev==='PC'?kpc++:kmo++;
-        return { dev, grp, bj, sojae, date, area, areaEn:AREA_EN[area]||area, landing:'', baseUrl:'', searchName:sn, kidVal:`${cfg_group.kid_pre}${kidNum}`, ptnr:dev==='PC'?cfg_group.ptnr_pc:cfg_group.ptnr_mo, grpEn:dev==='PC'?cfg_group.grp_en_pc:cfg_group.grp_en_mo, utmBj:cfg_group.utm_bj };
-      });
-    }
+    if (!rows1?.length) { alert('1단계에서 먼저 소재명을 생성해주세요!'); return; }
 
     let errors = 0;
-    const results = targetRows.map(r => {
+    const results = rows1.map(r => {
       const ekaUrl = ekaMap[r.searchName] || '';
-      if (!ekaUrl) { errors++; return {...r, finalUrl:'[에카URL없음]', landingName: r.landing||'-'}; }
+      if (!ekaUrl) { errors++; return {...r, finalUrl:'[에카URL없음]'}; }
+      // 에카 결과 URL: {baseUrl}src=naver_br&kw=XXXXX
       const idx = ekaUrl.indexOf('src=');
-      const ekaCode = idx>=0?ekaUrl.substring(idx):'';
-      const landingUrlPart = idx>=0?ekaUrl.substring(0,idx):ekaUrl;
-      const landingName = r.landing || LANDING_URL_TO_NAME[landingUrlPart] || landingUrlPart;
-      const baseUrl = r.baseUrl || landingUrlPart;
+      const ekaCode = idx >= 0 ? ekaUrl.substring(idx) : '';
+      const baseUrl = r.baseUrl || (idx >= 0 ? ekaUrl.substring(0, idx) : ekaUrl);
       const finalUrl = buildFinalUrl({...r, baseUrl}, ekaCode);
-      return {...r, baseUrl, landingName, finalUrl};
+      return {...r, finalUrl};
     });
 
     setErrCount(errors);
-    const headers = ['매체','디바이스','그룹명','범용/보종','소재명','날짜','영역명','에카업로드검색어명','랜딩구분','키워드ID','파트너코드','최종URL'];
-    const data = results.map(r => ['네이버',r.dev,r.grp,r.bj,r.sojae,r.date,r.area,r.searchName,r.landingName||r.landing,r.kidVal,r.ptnr,r.finalUrl]);
-    const fname = results[0]?`최종URL_${results[0].sojae}_${results[0].date}.xlsx`:'최종URL.xlsx';
+    // 최종 파일: 검색어(소재명) / 최종URL — 2열
+    const headers = ['검색어(소재명)', '최종URL'];
+    const data = results.map(r => [r.searchName, r.finalUrl]);
+    const fname = results[0] ? `최종URL_${results[0].sojae}_${results[0].date}.xlsx` : '최종URL.xlsx';
     downloadXlsx(headers, data, '최종URL', fname);
     setDone(true);
   };
@@ -324,6 +319,33 @@ function Step2({ rows1 }) {
 export default function App() {
   const [step, setStep] = useState(1);
   const [rows1, setRows1] = useState([]);
+  const [landingUrlIndex, setLandingUrlIndex] = useState(null);
+  const [landingIndexStatus, setLandingIndexStatus] = useState('랜딩URL 인덱스 로딩 중...');
+  const [codeMap, setCodeMap] = useState(null);
+  const [codeMapStatus, setCodeMapStatus] = useState('설정 코드맵 로딩 중...');
+
+  useEffect(() => {
+    fetchLandingUrlIndex().then(data => {
+      if (data) {
+        setLandingUrlIndex(data);
+        const pcCount = Object.keys(data.PC || {}).length;
+        const moCount = Object.keys(data.MO || {}).length;
+        setLandingIndexStatus(`✓ 랜딩URL 인덱스 로드됨 — PC ${pcCount}개 / MO ${moCount}개`);
+      } else {
+        setLandingIndexStatus('⚠ 랜딩URL 인덱스 로드 실패 — 구글 시트 GAS 설정을 확인해주세요');
+      }
+    });
+    fetchSettings().then(map => {
+      if (map) {
+        setCodeMap(map);
+        const count = Object.keys(map).length;
+        setCodeMapStatus(`✓ 코드맵 로드됨 — ${count}개 조합`);
+      } else {
+        setCodeMapStatus('⚠ 코드맵 로드 실패 — [설정] 시트 GAS 설정을 확인해주세요');
+      }
+    });
+  }, []);
+
   return (
     <div className="app">
       <header className="header">
@@ -338,7 +360,7 @@ export default function App() {
           <div className="tab-arrow">→</div>
           <button className={`tab ${step===2?'tab-on':''}`} onClick={()=>setStep(2)}><span className="tab-num">02</span><span className="tab-label">최종 URL 완성</span></button>
         </div>
-        {step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}}/>}
+        {step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}} landingUrlIndex={landingUrlIndex} landingIndexStatus={landingIndexStatus} codeMap={codeMap} codeMapStatus={codeMapStatus}/>}
         {step===2&&<Step2 rows1={rows1}/>}
       </main>
     </div>
