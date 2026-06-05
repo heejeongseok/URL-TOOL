@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from 'react';
-import Encoding from 'encoding-japanese';
 import * as XLSX from 'xlsx';
 import {
   TEMPLATES, LANDING_OPTIONS, DEFAULT_LANDING,
@@ -21,16 +20,14 @@ function downloadXlsx(headers, data, sheetName, fileName) {
   XLSX.writeFile(wb, fileName);
 }
 
-// 에카 업로드용 CSV — CP949 인코딩 (에카가 CP949만 받음)
 function downloadEkaCsv(rows, fileName) {
   const lines = [
     ['광고상품','검색어','연결URL'],
     ...rows.map(r => ['네이버(브랜드검색)', r.searchName, r.baseUrl])
   ];
-  const csv = lines.map(row => row.join(',')).join('\r\n');
-  // BOM 있는 UTF-8 — 에카 업로드 시 한글 정상 표시
-  const bom = '\uFEFF';
-  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const csv = lines.map(row => row.join(',')).join('
+');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = fileName; a.click();
@@ -235,10 +232,9 @@ function Step2({ rows1 }) {
     setEkaFile(file);
     const reader = new FileReader();
     reader.onload = (e) => {
-      // 에카 결과 파일은 CP949 인코딩
+      // 에카 결과 파일 — TextDecoder로 CP949 디코딩
       const ab = e.target.result;
-      const unicodeArray = Encoding.convert(new Uint8Array(ab), { to: 'UNICODE', from: 'AUTO' });
-      const text = Encoding.codeToString(unicodeArray);
+      const text = new TextDecoder('euc-kr').decode(new Uint8Array(ab));
       const lines = text.split('\n').filter(l => l.trim());
       const map = {};
       for (let i = 1; i < lines.length; i++) {
