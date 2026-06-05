@@ -27,16 +27,11 @@ function downloadEkaCsv(rows, fileName) {
     ['광고상품','검색어','연결URL'],
     ...rows.map(r => ['네이버(브랜드검색)', r.searchName, r.baseUrl])
   ];
-  const csv = lines.map(row => row.join(',')).join('
-');
-
-  // CP949 인코딩 변환
-  const encoder = new TextEncoder();
-  // TextEncoder는 UTF-8만 지원하므로 BOM 없는 UTF-8로 내려받되,
-  // 실제 에카가 CP949를 요구하면 iconv-lite가 없으니 서버사이드 필요.
-  // → 현실적으로: BOM 있는 UTF-8 CSV로 내리면 Excel에서도 한글 정상표시
-  const bom = '﻿';
-  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const csv = lines.map(row => row.join(',')).join('\r\n');
+  const unicodeArray = Encoding.stringToCode(csv);
+  const cp949Array = Encoding.convert(unicodeArray, { to: 'SJIS', from: 'UNICODE' });
+  const uint8 = new Uint8Array(cp949Array);
+  const blob = new Blob([uint8], { type: 'text/csv;charset=euc-kr;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = fileName; a.click();
