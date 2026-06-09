@@ -233,9 +233,15 @@ function Step2({ rows1 }) {
     setEkaFile(file);
     const reader = new FileReader();
     reader.onload = (e) => {
-      // 에카 결과 파일 — TextDecoder로 CP949 디코딩
-      const ab = e.target.result;
-      const text = new TextDecoder('euc-kr').decode(new Uint8Array(ab));
+      const ab = new Uint8Array(e.target.result);
+      // BOM(EF BB BF) 있으면 UTF-8, 없으면 euc-kr 시도
+      let text;
+      if (ab[0] === 0xEF && ab[1] === 0xBB && ab[2] === 0xBF) {
+        text = new TextDecoder('utf-8').decode(ab.slice(3));
+      } else {
+        try { text = new TextDecoder('euc-kr').decode(ab); }
+        catch { text = new TextDecoder('utf-8').decode(ab); }
+      }
       const lines = text.split('\n').filter(l => l.trim());
       const map = {};
       for (let i = 1; i < lines.length; i++) {
@@ -287,6 +293,7 @@ function Step2({ rows1 }) {
           {ekaFile&&<div className="upload-sub">{Object.keys(ekaMap).length}개 검색어 로드됨</div>}
         </div>
         <input id="eka-file" type="file" accept=".csv,.xlsx" style={{display:'none'}} onChange={e=>e.target.files[0]&&handleEkaFile(e.target.files[0])}/>
+        {ekaFile&&<button className="btn-remove-file" onClick={e=>{e.preventDefault();setEkaFile(null);setEkaMap({});setDone(false);document.getElementById('eka-file').value='';}}>✕ 파일 삭제하고 다시 올리기</button>}
       </div>
 
       {rows1?.length>0&&<div className="info-box">✓ 1단계에서 생성된 {rows1.length}개 행 자동 연결됨</div>}
