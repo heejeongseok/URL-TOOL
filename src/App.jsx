@@ -248,8 +248,8 @@ function Step2({ rows1 }) {
         const cols = lines[i].split(',');
         if (cols.length < 4) continue;
         // 에카 결과: 광고매체, 광고상품, 검색어(col2), 광고코드URL(col3)
-        const name = cols[2]?.trim().replace(/^"|"$/g,'');
-        const url  = cols[3]?.trim().replace(/^"|"$/g,'');
+        const name = cols[2]?.trim().replace(/^"|"$/g,'').replace(/\r/g,'');
+        const url  = cols[3]?.trim().replace(/^"|"$/g,'').replace(/\r/g,'');
         if (name && url) map[name] = url;
       }
       setEkaMap(map);
@@ -265,7 +265,6 @@ function Step2({ rows1 }) {
     const results = rows1.map(r => {
       const ekaUrl = ekaMap[r.searchName] || '';
       if (!ekaUrl) { errors++; return {...r, finalUrl:'[에카URL없음]'}; }
-      // 에카 결과 URL: {baseUrl}src=naver_br&kw=XXXXX
       const idx = ekaUrl.indexOf('src=');
       const ekaCode = idx >= 0 ? ekaUrl.substring(idx) : '';
       const baseUrl = r.baseUrl || (idx >= 0 ? ekaUrl.substring(0, idx) : ekaUrl);
@@ -274,7 +273,6 @@ function Step2({ rows1 }) {
     });
 
     setErrCount(errors);
-    // 최종 파일: 검색어(소재명) / 최종URL — 2열
     const headers = ['검색어(소재명)', '최종URL'];
     const data = results.map(r => [r.searchName, r.finalUrl]);
     const fname = results[0] ? `최종URL_${results[0].sojae}_${results[0].date}.xlsx` : '최종URL.xlsx';
