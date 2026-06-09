@@ -126,7 +126,7 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, code
 
       // 구글 시트에 키워드ID 누적 저장
       setSheetStatus('구글 시트에 키워드ID 저장 중...');
-      const result = await appendKeywords(rows.map(r => ({ searchName: r.searchName, area: r.area, kidVal: r.kidVal })));
+      const result = await appendKeywords(rows);
       if (result.success) {
         setSheetStatus(`✓ 구글 시트에 ${result.count}개 키워드ID 저장 완료!`);
       } else {
