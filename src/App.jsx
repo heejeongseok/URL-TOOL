@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import {
   TEMPLATES, LANDING_OPTIONS, DEFAULT_LANDING,
   BUJONG_CFG, AREA_EN, buildRows, buildFinalUrl,
-  fetchLastKidNums, appendKeywords, fetchLandingUrlIndex, fetchSettings, appendFinalUrls
+  fetchLastKidNums, appendKeywords, fetchLandingUrlIndex, fetchSettings, appendFinalUrls, getPartnerCode
 } from './data';
 import './App.css';
 
@@ -78,7 +78,7 @@ function LandingEditor({ dev, tpl, landing, onChange }) {
   );
 }
 
-function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, codeMapStatus }) {
+function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, partnerMap, codeMapStatus }) {
   const [sojae, setSojae] = useState('');
   const [date, setDate] = useState(today());
   const [bujong, setBujong] = useState('자동차');
@@ -118,11 +118,12 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, code
         landingMO: getEffectiveLanding('MO'),
         landingUrlIndex,
         codeMap,
+        partnerMap,
       });
       onRowsBuilt(rows);
 
       // 에카 업로드용 CSV — 광고상품/검색어/연결URL 3열, CP949 호환
-      downloadEkaCsv(rows, `에카업로드_${sojae}_${date}.csv`);
+      downloadEkaCsv(rows.filter(r => !r.ekaExclude), `에카업로드_${sojae}_${date}.csv`);
 
       // 구글 시트에 키워드ID 누적 저장
       setSheetStatus('구글 시트에 키워드ID 저장 중...');
@@ -312,6 +313,7 @@ export default function App() {
   const [landingUrlIndex, setLandingUrlIndex] = useState(null);
   const [landingIndexStatus, setLandingIndexStatus] = useState('랜딩URL 인덱스 로딩 중...');
   const [codeMap, setCodeMap] = useState(null);
+  const [partnerMap, setPartnerMap] = useState(null);
   const [codeMapStatus, setCodeMapStatus] = useState('설정 코드맵 로딩 중...');
 
   useEffect(() => {
@@ -325,11 +327,13 @@ export default function App() {
         setLandingIndexStatus('⚠ 랜딩URL 인덱스 로드 실패 — 구글 시트 GAS 설정을 확인해주세요');
       }
     });
-    fetchSettings().then(map => {
-      if (map) {
-        setCodeMap(map);
-        const count = Object.keys(map).length;
-        setCodeMapStatus(`✓ 코드맵 로드됨 — ${count}개 조합`);
+    fetchSettings().then(data => {
+      if (data?.codeMap) {
+        setCodeMap(data.codeMap);
+        setPartnerMap(data.partnerMap || null);
+        const count = Object.keys(data.codeMap).length;
+        const pCount = Object.keys(data.partnerMap || {}).length;
+        setCodeMapStatus(`✓ 코드맵 로드됨 — ${count}개 조합 / 파트너코드 ${pCount}개`);
       } else {
         setCodeMapStatus('⚠ 코드맵 로드 실패 — [설정] 시트 GAS 설정을 확인해주세요');
       }
@@ -350,7 +354,7 @@ export default function App() {
           <div className="tab-arrow">→</div>
           <button className={`tab ${step===2?'tab-on':''}`} onClick={()=>setStep(2)}><span className="tab-num">02</span><span className="tab-label">최종 URL 완성</span></button>
         </div>
-        {step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}} landingUrlIndex={landingUrlIndex} landingIndexStatus={landingIndexStatus} codeMap={codeMap} codeMapStatus={codeMapStatus}/>}
+        {step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}} landingUrlIndex={landingUrlIndex} landingIndexStatus={landingIndexStatus} codeMap={codeMap} partnerMap={partnerMap} codeMapStatus={codeMapStatus}/>}
         {step===2&&<Step2 rows1={rows1}/>}
       </main>
     </div>
