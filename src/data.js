@@ -216,6 +216,26 @@ export function buildRows({ sojae, date, bujong, pcTpl, moTpl, landingPC, landin
   return rows;
 }
 
+// [최종URL누적] 시트에 저장
+// B(날짜) C(기기) D(소재명) E(최종URL)
+export async function appendFinalUrls(rows) {
+  const data = rows.map(r => ({
+    date: r.date,
+    dev: r.dev,
+    searchName: r.searchName,
+    finalUrl: r.finalUrl,
+  }));
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'appendFinalUrls', rows: data }),
+    });
+    return await res.json();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 export function buildFinalUrl(row, ekaCode) {
   const utmSrc = `naver_bs_${row.dev === 'PC' ? 'pc' : 'mo'}`;
   const utmCont = `${row.grpEn}_${row.date}_${row.areaEn}`;
