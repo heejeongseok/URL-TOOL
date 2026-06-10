@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import {
   TEMPLATES, LANDING_OPTIONS, DEFAULT_LANDING,
   BUJONG_CFG, AREA_EN, buildRows, buildFinalUrl,
-  fetchLastKidNums, appendKeywords, fetchLandingUrlIndex, fetchSettings
+  fetchLastKidNums, appendKeywords, fetchLandingUrlIndex, fetchSettings, appendFinalUrls
 } from './data';
 import './App.css';
 
@@ -277,6 +277,10 @@ function Step2({ rows1 }) {
     const data = results.map(r => [r.searchName, r.finalUrl]);
     const fname = results[0] ? `최종URL_${results[0].sojae}_${results[0].date}.xlsx` : '최종URL.xlsx';
     downloadXlsx(headers, data, '최종URL', fname);
+
+    // 구글 시트 [최종URL누적]에 자동 저장
+    appendFinalUrls(results).catch(() => {});
+
     setDone(true);
   };
 
