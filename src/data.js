@@ -221,7 +221,6 @@ export function buildRows({ sojae, date, bujong, pcTpl, moTpl, landingPC, landin
       const baseUrl = moIndex[landing] || moIndex['산출페이지'] || '';
       // 파트너코드: 랜딩페이지 기준으로 룩업 (이륜차 랜딩이면 C614 등)
       const ptnrMo = getPartnerCode(partnerMap, 'MO', landing) || getPartnerCode(partnerMap, 'MO', g.bj) || g.ptnr_mo;
-      if (landing === '이륜차') console.log('[DEBUG] MO 이륜차 파트너코드:', ptnrMo, '| partnerMap:', JSON.stringify(partnerMap), '| landing:', landing);
       const ekaExclude = ['운전자보험','실손보험'].includes(landing);
       rows.push({ dev:'MO', grp:g.grp, bj:g.bj, sojae, date, area, areaEn:AREA_EN[area]||area, landing, baseUrl, searchName:`네이버MO_${g.grp}_${g.bj}_${sojae}_${date}_${area}`, kidCode:moCode, kidVal:'', ptnr:ptnrMo, grpEn:g.grp_en_mo, utmBj:g.utm_bj, ekaExclude });
     }
