@@ -189,6 +189,10 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
       <div className="card">
         <div className="card-title">랜딩URL 인덱스</div>
         <div className={`sheet-status ${landingUrlIndex ? 'ok' : ''}`}>{landingIndexStatus}</div>
+        <div className={`sheet-status ${codeMap ? 'ok' : ''}`} style={{marginTop:'.5rem'}}>
+          {codeMapStatus}
+        </div>
+
         {landingUrlIndex && (
           <details style={{marginTop:'.5rem'}}>
             <summary style={{fontSize:'11px',color:'var(--text-3)',cursor:'pointer'}}>불러온 랜딩 목록 확인 (클릭)</summary>
