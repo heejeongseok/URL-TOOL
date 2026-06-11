@@ -268,6 +268,8 @@ function Step2({ rows1 }) {
 
     let errors = 0;
     const results = rows1.map(r => {
+      // 에카 제외 항목(실손보험/운전자보험/펫보험)은 baseUrl 그대로 최종URL
+      if (r.ekaExclude) return {...r, finalUrl: r.baseUrl};
       const ekaUrl = ekaMap[r.searchName] || '';
       if (!ekaUrl) { errors++; return {...r, finalUrl:'[에카URL없음]'}; }
       const idx = ekaUrl.indexOf('src=');
