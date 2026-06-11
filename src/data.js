@@ -121,6 +121,7 @@ export async function appendKeywords(rows) {
     .map(r => ({
       date: r.date,
       searchName: r.searchName,
+      area: r.area,
       kidVal: r.kidVal,
       code: r.kidCode,
       num: parseInt(r.kidVal.replace(r.kidCode, '')),
@@ -206,7 +207,8 @@ export function buildRows({ sojae, date, bujong, pcTpl, moTpl, landingPC, landin
     for (const area of pcAreas) {
       const landing = landingPC[g.bj]?.[area] || '산출페이지';
       const baseUrl = pcIndex[landing] || pcIndex['산출페이지'] || '';
-      const ptnrPc = getPartnerCode(partnerMap, 'PC', g.bj) || g.ptnr_pc;
+      // 파트너코드: 랜딩페이지 기준으로 룩업 (이륜차 랜딩이면 C614 등)
+      const ptnrPc = getPartnerCode(partnerMap, 'PC', landing) || getPartnerCode(partnerMap, 'PC', g.bj) || g.ptnr_pc;
       const ekaExclude = ['운전자보험','실손보험'].includes(landing);
       rows.push({ dev:'PC', grp:g.grp, bj:g.bj, sojae, date, area, areaEn:AREA_EN[area]||area, landing, baseUrl, searchName:`네이버PC_${g.grp}_${g.bj}_${sojae}_${date}_${area}`, kidCode:pcCode, kidVal:'', ptnr:ptnrPc, grpEn:g.grp_en_pc, utmBj:g.utm_bj, ekaExclude });
     }
@@ -217,7 +219,8 @@ export function buildRows({ sojae, date, bujong, pcTpl, moTpl, landingPC, landin
     for (const area of moAreas) {
       const landing = landingMO[g.bj]?.[area] || '산출페이지';
       const baseUrl = moIndex[landing] || moIndex['산출페이지'] || '';
-      const ptnrMo = getPartnerCode(partnerMap, 'MO', g.bj) || g.ptnr_mo;
+      // 파트너코드: 랜딩페이지 기준으로 룩업 (이륜차 랜딩이면 C614 등)
+      const ptnrMo = getPartnerCode(partnerMap, 'MO', landing) || getPartnerCode(partnerMap, 'MO', g.bj) || g.ptnr_mo;
       const ekaExclude = ['운전자보험','실손보험'].includes(landing);
       rows.push({ dev:'MO', grp:g.grp, bj:g.bj, sojae, date, area, areaEn:AREA_EN[area]||area, landing, baseUrl, searchName:`네이버MO_${g.grp}_${g.bj}_${sojae}_${date}_${area}`, kidCode:moCode, kidVal:'', ptnr:ptnrMo, grpEn:g.grp_en_mo, utmBj:g.utm_bj, ekaExclude });
     }
