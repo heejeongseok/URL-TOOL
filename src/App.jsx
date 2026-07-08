@@ -39,12 +39,10 @@ function Chip({ label, active, color, onClick }) {
   return <button onClick={onClick} className={`chip ${active ? `chip-on chip-${color}` : ''}`}>{label}</button>;
 }
 
-// 랜딩 에디터 — 범용/보종 나란히
 function LandingEditor({ dev, tpl, landing, onChange }) {
   const areas = TEMPLATES[dev][tpl] || [];
   if (!areas.length) return null;
   const isHighlight = val => val !== '산출페이지' && val !== '메인';
-  const makeOpts = sel => LANDING_OPTIONS.map(l => <option key={l} selected={l===sel}>{l}</option>);
 
   return (
     <div className="landing-block-wrap">
@@ -86,8 +84,24 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
   const [moTpl, setMoTpl] = useState('섬네일형-탭');
   const [landing, setLanding] = useState({ PC: { 범용:{}, 보종:{} }, MO: { 범용:{}, 보종:{} } });
   const [loading, setLoading] = useState(false);
-  const [sheetStatus, setSheetStatus] = useState('');
+  const [sheetLoading, setSheetLoading] = useState(true); // ★ 추가
+  const [sheetStatus, setSheetStatus] = useState('구글 시트에서 키워드ID 불러오는 중...');
   const [generated, setGenerated] = useState(false);
+
+  // ★ 페이지 열리면 마지막 키워드ID 자동 불러오기
+  useEffect(() => {
+    fetchLastKidNums().then(({ pc, mo }) => {
+      if (pc !== null) {
+        setSheetStatus(`✓ 구글 시트 연결됨 — PC 마지막: ${pc} / MO 마지막: ${mo}`);
+      } else {
+        setSheetStatus('구글 시트 데이터 없음 — 기본값 사용');
+      }
+      setSheetLoading(false); // ★ 로딩 완료
+    }).catch(() => {
+      setSheetStatus('⚠ 구글 시트 연결 실패');
+      setSheetLoading(false);
+    });
+  }, []);
 
   const handleLandingChange = (dev, bj, area, val) => {
     setLanding(prev => ({
@@ -122,10 +136,8 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
       });
       onRowsBuilt(rows);
 
-      // 에카 업로드용 CSV — 광고상품/검색어/연결URL 3열, CP949 호환
       downloadEkaCsv(rows.filter(r => !r.ekaExclude), `에카업로드_${sojae}_${date}.csv`);
 
-      // 구글 시트에 키워드ID 누적 저장
       setSheetStatus('구글 시트에 키워드ID 저장 중...');
       const result = await appendKeywords(rows);
       if (result.success) {
@@ -187,11 +199,13 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
       </div>
 
       <div className="card">
-        <div className="card-title">랜딩URL 인덱스</div>
-        <div className={`sheet-status ${landingUrlIndex ? 'ok' : ''}`}>{landingIndexStatus}</div>
-        <div className={`sheet-status ${codeMap ? 'ok' : ''}`} style={{marginTop:'.5rem'}}>
-          {codeMapStatus}
+        <div className="card-title">연결 상태</div>
+        {/* ★ 키워드ID 로딩 상태 */}
+        <div className={`sheet-status ${!sheetLoading && sheetStatus.includes('✓') ? 'ok' : ''}`}>
+          {sheetLoading ? '⏳ 구글 시트에서 키워드ID 불러오는 중...' : sheetStatus}
         </div>
+        <div className={`sheet-status ${landingUrlIndex ? 'ok' : ''}`} style={{marginTop:'.5rem'}}>{landingIndexStatus}</div>
+        <div className={`sheet-status ${codeMap ? 'ok' : ''}`} style={{marginTop:'.5rem'}}>{codeMapStatus}</div>
 
         {landingUrlIndex && (
           <details style={{marginTop:'.5rem'}}>
@@ -220,10 +234,15 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
         )}
       </div>
 
-      <button className="btn btn-primary btn-lg" onClick={generate} disabled={loading}>
-        {loading ? '생성 중...' : '⬇ 에카 업로드용 파일 생성 & 다운로드'}
+      {/* ★ sheetLoading 중엔 버튼 비활성화 */}
+      <button
+        className="btn btn-primary btn-lg"
+        onClick={generate}
+        disabled={loading || sheetLoading}
+      >
+        {sheetLoading ? '⏳ 시트 로딩 중... (잠시만요)' : loading ? '생성 중...' : '⬇ 에카 업로드용 파일 생성 & 다운로드'}
       </button>
-      {generated && <div className="success-msg">✓ 에카업로드_{sojae}_{date}.xlsx 다운로드 완료! 키워드ID 구글 시트에 저장됨.</div>}
+      {generated && <div className="success-msg">✓ 에카업로드_{sojae}_{date}.csv 다운로드 완료! 키워드ID 구글 시트에 저장됨.</div>}
     </div>
   );
 }
@@ -239,7 +258,6 @@ function Step2({ rows1 }) {
     const reader = new FileReader();
     reader.onload = (e) => {
       const ab = new Uint8Array(e.target.result);
-      // BOM(EF BB BF) 있으면 UTF-8, 없으면 euc-kr 시도
       let text;
       if (ab[0] === 0xEF && ab[1] === 0xBB && ab[2] === 0xBF) {
         text = new TextDecoder('utf-8').decode(ab.slice(3));
@@ -252,7 +270,6 @@ function Step2({ rows1 }) {
       for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(',');
         if (cols.length < 4) continue;
-        // 에카 결과: 광고매체, 광고상품, 검색어(col2), 광고코드URL(col3)
         const name = cols[2]?.trim().replace(/^"|"$/g,'').replace(/\r/g,'');
         const url  = cols[3]?.trim().replace(/^"|"$/g,'').replace(/\r/g,'');
         if (name && url) map[name] = url;
@@ -268,7 +285,6 @@ function Step2({ rows1 }) {
 
     let errors = 0;
     const results = rows1.map(r => {
-      // 에카 제외 항목(실손보험/운전자보험/펫보험)은 baseUrl 그대로 최종URL
       if (r.ekaExclude) return {...r, finalUrl: r.baseUrl};
       const ekaUrl = ekaMap[r.searchName] || '';
       if (!ekaUrl) { errors++; return {...r, finalUrl:'[에카URL없음]'}; }
@@ -285,9 +301,7 @@ function Step2({ rows1 }) {
     const fname = results[0] ? `최종URL_${results[0].sojae}_${results[0].date}.xlsx` : '최종URL.xlsx';
     downloadXlsx(headers, data, '최종URL', fname);
 
-    // 구글 시트 [최종URL누적]에 자동 저장
     appendFinalUrls(results).catch(() => {});
-
     setDone(true);
   };
 
