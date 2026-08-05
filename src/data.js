@@ -104,11 +104,10 @@ export async function fetchLastKidNums() {
 // 2) rows에 kidVal 확정 후 시트에 저장
 // PC: B(날짜) C(소재명) D(키워드ID) E(코드) F(번호)
 // MO: H(날짜) I(소재명) J(영역명) K(키워드ID) L(코드) M(번호)
-export async function appendKeywords(rows) {
-  // 마지막 번호 가져오기
-  const { pc: lastPc, mo: lastMo } = await fetchLastKidNums();
-  let kidPc = (lastPc ?? 9000) + 1;
-  let kidMo = (lastMo ?? 11000) + 1;
+export async function appendKeywords(rows, pcStart, moStart) {
+  // ★ 시트 재조회 대신 화면에서 받은(자동로드 또는 직접수정한) 마지막 번호 사용
+  let kidPc = (pcStart ?? 9000) + 1;
+  let kidMo = (moStart ?? 11000) + 1;
 
   // rows에 kidVal 확정
   rows.forEach(r => {
