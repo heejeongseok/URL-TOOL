@@ -87,18 +87,24 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
   const [sheetLoading, setSheetLoading] = useState(true); // ★ 추가
   const [sheetStatus, setSheetStatus] = useState('구글 시트에서 키워드ID 불러오는 중...');
   const [generated, setGenerated] = useState(false);
+  const [pcNum, setPcNum] = useState(null); // ★ PC 마지막 번호 (편집 가능)
+  const [moNum, setMoNum] = useState(null); // ★ MO 마지막 번호 (편집 가능)
 
-  // ★ 페이지 열리면 마지막 키워드ID 자동 불러오기
+  // ★ 페이지 열리면 마지막 키워드ID 자동 불러오기 (입력창 초기값으로만 사용, 이후엔 직접 수정 가능)
   useEffect(() => {
     fetchLastKidNums().then(({ pc, mo }) => {
+      setPcNum(pc ?? 9000);
+      setMoNum(mo ?? 11000);
       if (pc !== null) {
-        setSheetStatus(`✓ 구글 시트 연결됨 — PC 마지막: ${pc} / MO 마지막: ${mo}`);
+        setSheetStatus(`✓ 구글 시트 연결됨 — 이상하면 아래 숫자 직접 수정하세요`);
       } else {
-        setSheetStatus('구글 시트 데이터 없음 — 기본값 사용');
+        setSheetStatus('구글 시트 데이터 없음 — 기본값 사용, 아래 숫자 직접 입력하세요');
       }
       setSheetLoading(false); // ★ 로딩 완료
     }).catch(() => {
-      setSheetStatus('⚠ 구글 시트 연결 실패');
+      setSheetStatus('⚠ 구글 시트 연결 실패 — 아래 숫자 직접 입력하세요');
+      setPcNum(9000);
+      setMoNum(11000);
       setSheetLoading(false);
     });
   }, []);
@@ -139,9 +145,20 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
       downloadEkaCsv(rows.filter(r => !r.ekaExclude), `에카업로드_${sojae}_${date}.csv`);
 
       setSheetStatus('구글 시트에 키워드ID 저장 중...');
-      const result = await appendKeywords(rows);
+      const result = await appendKeywords(rows, pcNum, moNum);
       if (result.success) {
         setSheetStatus(`✓ 구글 시트에 ${result.count}개 키워드ID 저장 완료!`);
+        // ★ 방금 사용한 마지막 번호로 입력창 갱신 (다음 생성 시 이어서 진행)
+        const pcRows = rows.filter(r => r.dev === 'PC');
+        const moRows = rows.filter(r => r.dev === 'MO');
+        if (pcRows.length) {
+          const last = pcRows[pcRows.length - 1];
+          setPcNum(parseInt(last.kidVal.replace(last.kidCode, '')));
+        }
+        if (moRows.length) {
+          const last = moRows[moRows.length - 1];
+          setMoNum(parseInt(last.kidVal.replace(last.kidCode, '')));
+        }
       } else {
         setSheetStatus('⚠ 구글 시트 저장 실패 — 로컬 CSV는 정상 다운로드됨');
       }
@@ -196,6 +213,32 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
         <LandingEditor dev="PC" tpl={pcTpl} landing={landing.PC} onChange={handleLandingChange}/>
         <div style={{height:'.75rem'}}/>
         <LandingEditor dev="MO" tpl={moTpl} landing={landing.MO} onChange={handleLandingChange}/>
+      </div>
+
+      <div className="card">
+        <div className="card-title">키워드ID 마지막 번호 (자동입력 — 이상하면 직접 수정)</div>
+        <div className="grid2">
+          <div className="form-group">
+            <label>PC 마지막 번호</label>
+            <input
+              type="number"
+              value={pcNum ?? ''}
+              onChange={e => setPcNum(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+              placeholder={sheetLoading ? '불러오는 중...' : '예: 9344'}
+              disabled={sheetLoading}
+            />
+          </div>
+          <div className="form-group">
+            <label>MO 마지막 번호</label>
+            <input
+              type="number"
+              value={moNum ?? ''}
+              onChange={e => setMoNum(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+              placeholder={sheetLoading ? '불러오는 중...' : '예: 11344'}
+              disabled={sheetLoading}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="card">
