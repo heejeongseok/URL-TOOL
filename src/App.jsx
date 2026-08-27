@@ -416,6 +416,10 @@ export default function App() {
           <button className={`tab ${step===1?'tab-on':''}`} onClick={()=>setStep(1)}><span className="tab-num">01</span><span className="tab-label">에카 업로드용 생성</span></button>
           <div className="tab-arrow">→</div>
           <button className={`tab ${step===2?'tab-on':''}`} onClick={()=>setStep(2)}><span className="tab-num">02</span><span className="tab-label">최종 URL 완성</span></button>
+          <div className="tab-arrow">→</div>
+          <a className="tab" href={`${process.env.PUBLIC_URL}/dashboard.html`} target="_blank" rel="noopener noreferrer">
+            <span className="tab-num">03</span><span className="tab-label">브랜드검색 대시보드</span>
+          </a>
         </div>
         {step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}} landingUrlIndex={landingUrlIndex} landingIndexStatus={landingIndexStatus} codeMap={codeMap} partnerMap={partnerMap} codeMapStatus={codeMapStatus}/>}
         {step===2&&<Step2 rows1={rows1}/>}
