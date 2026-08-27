@@ -92,3 +92,6 @@ textarea{resize:vertical;font-family:'JetBrains Mono',monospace;font-size:11px}
   width: 100%;
 }
 .btn-remove-file:hover { background: #fff5f5; }
+
+a.tab{text-decoration:none}
+
