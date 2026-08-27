@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>브랜드검색 셋팅파일 URL 매칭 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#F3F6F5;
+    --surface:#FFFFFF;
+    --ink:#10151A;
+    --ink-soft:#5B6A67;
+    --line:#DEE7E3;
+    --brand:#03C75A;
+    --brand-dark:#02A64B;
+    --brand-soft:#E4F8ED;
+    --warn:#E8622C;
+    --warn-soft:#FDECE3;
+    --idle:#B9C4C0;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --display: 'Space Grotesk', 'Pretendard Variable', 'Apple SD Gothic Neo', -apple-system, sans-serif;
+    --body: 'Pretendard Variable', 'Apple SD Gothic Neo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--body);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px;margin:0 auto;padding:40px 24px 80px;}
+
+  header.top{margin-bottom:36px;}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--brand-dark);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:7px;height:7px;border-radius:50%;
+    background:var(--brand);
+    display:inline-block;
+  }
+  h1{
+    font-family:var(--display);
+    font-size:32px;
+    font-weight:600;
+    letter-spacing:-0.01em;
+    margin:0 0 10px;
+    line-height:1.25;
+  }
+  .lede{
+    color:var(--ink-soft);
+    font-size:15px;
+    line-height:1.6;
+    max-width:620px;
+    margin:0;
+  }
+
+  /* Material name box */
+  .material-box{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:20px 22px;
+    margin-bottom:20px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .material-label{display:flex;flex-direction:column;gap:4px;}
+  .material-title{
+    font-family:var(--display);
+    font-size:15px;
+    font-weight:600;
+  }
+  .material-desc{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    line-height:1.55;
+  }
+  #materialInput{
+    font-family:var(--body);
+    font-size:15px;
+    padding:12px 14px;
+    border-radius:10px;
+    border:1.5px solid var(--line);
+    outline:none;
+    transition:border-color .2s;
+    width:100%;
+  }
+  #materialInput:focus{border-color:var(--brand-dark);}
+  .material-hint{
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--ink-soft);
+  }
+  .material-hint.found{color:var(--brand-dark);}
+
+  /* Pipeline */
+  .pipeline{
+    display:grid;
+    grid-template-columns: 1fr 40px 1fr 40px 1fr;
+    align-items:stretch;
+    margin:32px 0 8px;
+  }
+  @media (max-width: 760px){
+    .pipeline{grid-template-columns:1fr; gap:14px;}
+    .connector{display:none;}
+  }
+  .connector{
+    align-self:center;
+    height:2px;
+    background:var(--line);
+    position:relative;
+    margin-top:22px;
+  }
+  .connector .fill{
+    position:absolute;top:0;left:0;height:100%;width:0%;
+    background:var(--brand);
+    transition:width .5s ease;
+  }
+  .step{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:20px 20px 22px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    min-height:196px;
+    position:relative;
+    transition:border-color .25s ease, box-shadow .25s ease;
+  }
+  .step.done{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset;}
+  .step .num{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--idle);
+    letter-spacing:.06em;
+  }
+  .step.done .num{color:var(--brand-dark);}
+  .step .badge{
+    width:26px;height:26px;border-radius:50%;
+    background:var(--bg);
+    border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:600;color:var(--ink-soft);
+    position:absolute; top:18px; right:18px;
+  }
+  .step.done .badge{background:var(--brand);border-color:var(--brand);color:#fff;}
+  .step h3{
+    font-family:var(--display);
+    font-size:17px;
+    margin:0;
+    padding-right:30px;
+  }
+  .step p.desc{
+    font-size:13px;
+    color:var(--ink-soft);
+    margin:0;
+    line-height:1.55;
+  }
+  .drop{
+    border:2px dashed var(--brand-dark);
+    border-radius:10px;
+    padding:18px 12px;
+    text-align:center;
+    font-size:13.5px;
+    font-weight:700;
+    color:var(--brand-dark);
+    background:var(--brand-soft);
+    cursor:pointer;
+    transition:background .2s, border-color .2s, color .2s;
+    margin-top:auto;
+    line-height:1.5;
+  }
+  .drop:hover, .drop.drag{background:var(--brand);border-color:var(--brand-dark);color:#06210F;}
+  .drop input{display:none;}
+  .drop .fname{
+    display:block;
+    margin-top:8px;
+    font-family:var(--mono);
+    font-size:11.5px;
+    font-weight:400;
+    color:var(--ink);
+    word-break:break-all;
+  }
+  .step3-inner{
+    margin-top:auto;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .status-line{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    font-family:var(--mono);
+  }
+  .status-line.ready{color:var(--brand-dark);}
+
+  /* Summary */
+  .summary{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px,1fr));
+    gap:12px;
+    margin:36px 0 28px;
+  }
+  @media (max-width:760px){.summary{grid-template-columns:repeat(2,1fr);}}
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px;
+  }
+  .card .label{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin-bottom:8px;
+  }
+  .card .value{
+    font-family:var(--display);
+    font-size:30px;
+    font-weight:600;
+    line-height:1;
+  }
+  .card.success .value{color:var(--brand-dark);}
+  .card.fail .value{color:var(--warn);}
+
+  /* Results */
+  .results{margin-top:8px;}
+  .results-head{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:14px;flex-wrap:wrap;gap:10px;
+  }
+  .results-head h2{
+    font-family:var(--display);
+    font-size:19px;margin:0;
+  }
+  .filters{display:flex;gap:6px;}
+  .filters button{
+    font-family:var(--body);
+    font-size:12.5px;
+    padding:6px 12px;
+    border-radius:20px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .filters button.active{
+    background:var(--ink);
+    color:#fff;
+    border-color:var(--ink);
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+    font-size:12.5px;
+  }
+  thead th{
+    text-align:left;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    background:var(--bg);
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+  }
+  tbody td{
+    padding:9px 12px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--bg);}
+  td.url{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);max-width:360px;word-break:break-all;}
+  td.cellref{font-family:var(--mono);color:var(--ink-soft);}
+  .dot{
+    display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;
+  }
+  .dot.ok{background:var(--brand);}
+  .dot.no{background:var(--warn);}
+  .typetag{
+    font-family:var(--mono);
+    font-size:10px;
+    color:var(--ink-soft);
+  }
+
+  .empty-note{
+    font-size:13px;color:var(--ink-soft);
+    padding:30px 10px;text-align:center;
+  }
+
+  /* Actions */
+  .actions{
+    margin-top:28px;
+    display:flex;gap:10px;flex-wrap:wrap;
+  }
+  button.primary{
+    font-family:var(--body);
+    font-weight:600;
+    font-size:14px;
+    padding:12px 22px;
+    border-radius:10px;
+    border:none;
+    background:var(--brand);
+    color:#06210F;
+    cursor:pointer;
+    transition:background .2s, transform .1s;
+  }
+  button.primary:hover{background:var(--brand-dark);color:#fff;}
+  button.primary:active{transform:scale(.98);}
+  button.ghost{
+    font-family:var(--body);
+    font-size:14px;
+    padding:12px 20px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:transparent;
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  button.ghost:hover{border-color:var(--ink-soft);color:var(--ink);}
+
+  footer{
+    margin-top:56px;
+    border-top:1px solid var(--line);
+    padding-top:20px;
+    font-size:12px;
+    color:var(--ink-soft);
+    line-height:1.7;
+  }
+  footer b{color:var(--ink);}
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;
+    padding:12px 20px;border-radius:10px;
+    font-size:13px;
+    opacity:0;
+    transition:opacity .25s, transform .25s;
+    pointer-events:none;
+    z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="eyebrow">브랜드검색 소재 자동화</div>
+    <h1>브랜드검색 셋팅파일 URL 매칭 대시보드</h1>
+    <p class="lede">최종URL 파일과 소재 세팅 파일, 두 개를 올리면 소재명 규칙(기기·구/신사명·범용/보종·영역)에 맞춰
+      URL을 자동으로 매칭해요. 결과를 바로 확인하고, 매칭이 반영된 엑셀 파일을 다운로드할 수 있어요.</p>
+  </header>
+
+  <section class="material-box">
+    <div class="material-label">
+      <span class="material-title">이번 소재명</span>
+      <span class="material-desc">"소재 세팅 분배" 시트의 I열(금번 세팅 소재)·J열(소재명 변경)을 이 텍스트로 자동 교체해요.
+        뒤쪽 날짜(0819 등)는 대시보드를 실행하는 오늘 날짜로 자동으로 바뀌어요.</span>
+    </div>
+    <input type="text" id="materialInput" placeholder="예: 특약중복적용">
+    <div class="material-hint" id="materialHint">파일을 올리면 현재 소재명을 알려드려요</div>
+  </section>
+
+  <section class="pipeline" id="pipeline">
+    <div class="step" id="step1">
+      <span class="num">STEP 01</span>
+      <div class="badge">1</div>
+      <h3>최종URL 파일</h3>
+      <p class="desc">A열 소재명 · B열 최종URL 형식의 파일이에요.<br>예: 네이버PC_구사명_범용_주행거리환급금_260812_홈링크</p>
+      <label class="drop" id="drop1">
+        ⬆ 파일을 끌어다 놓거나 클릭해서 선택
+        <input type="file" id="file1" accept=".xlsx,.xls">
+        <span class="fname" id="fname1"></span>
+      </label>
+    </div>
+
+    <div class="connector"><div class="fill" id="fill1"></div></div>
+
+    <div class="step" id="step2">
+      <span class="num">STEP 02</span>
+      <div class="badge">2</div>
+      <h3>소재 세팅 대시보드 파일</h3>
+      <p class="desc">PC/MO 시트의 G열에 영역명(홈링크·브랜드소식 등)이 적혀 있는 파일이에요.</p>
+      <label class="drop" id="drop2">
+        ⬆ 파일을 끌어다 놓거나 클릭해서 선택
+        <input type="file" id="file2" accept=".xlsx,.xls">
+        <span class="fname" id="fname2"></span>
+      </label>
+    </div>
+
+    <div class="connector"><div class="fill" id="fill2"></div></div>
+
+    <div class="step" id="step3">
+      <span class="num">STEP 03</span>
+      <div class="badge">3</div>
+      <h3>자동 매칭 결과</h3>
+      <p class="desc">두 파일이 준비되면 브라우저에서 바로 매칭이 실행돼요. 서버로 파일이 전송되지 않아요.</p>
+      <div class="step3-inner">
+        <span class="status-line" id="statusLine">대기 중 — 두 파일을 모두 올려주세요</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="summary" id="summary" hidden>
+    <div class="card"><div class="label">URL 매칭 대상</div><div class="value" id="statTotal">0</div></div>
+    <div class="card success"><div class="label">URL 매칭 성공</div><div class="value" id="statOk">0</div></div>
+    <div class="card fail"><div class="label">URL 매칭 실패</div><div class="value" id="statFail">0</div></div>
+    <div class="card"><div class="label">소재명 변경</div><div class="value" id="statMaterial">0</div></div>
+    <div class="card"><div class="label">처리 시간</div><div class="value" id="statTime">0ms</div></div>
+  </section>
+
+  <div class="actions" id="actions" hidden>
+    <button class="primary" id="downloadBtn">결과 파일 다운로드 (.xlsx)</button>
+    <button class="ghost" id="resetBtn">다시 시작</button>
+  </div>
+
+  <section class="results" id="results" hidden>
+    <div class="results-head">
+      <h2>매칭 상세</h2>
+      <div class="filters">
+        <button class="active" data-f="all">전체</button>
+        <button data-f="ok">성공만</button>
+        <button data-f="fail">실패만</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr><th style="width:22px"></th><th>시트</th><th>셀</th><th>영역 표기</th><th>매칭된 URL</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+
+  <footer>
+    <b>동작 방식</b> — 이 페이지는 모든 계산을 사용자의 브라우저 안에서 수행해요. 파일이 서버로 업로드되지 않고,
+    같이 쓰는 다른 팀원도 이 링크를 열어 각자의 파일 2개로 바로 사용할 수 있어요.<br>
+    <b>원본 보존</b> — 다운로드 파일은 원본 엑셀 파일의 압축 구조를 그대로 열어서 G열의 URL 셀만 딱 골라
+    수정하는 방식이에요. 그 외 이미지, 표 서식, 다른 셀 값 등은 전혀 건드리지 않아서 원본 그대로 유지돼요.<br>
+    <b>영역 자리 판단 방식</b> — G열에 이미 적혀 있는 값(이전 URL이나 이전 결과)은 보지 않고, 각 블록의
+    정해진 순서(홈링크→브랜드소식→메인이미지→타이틀→…)를 기준으로 자리를 판단해요. 그래서 G열에 예전 URL이
+    남아있어도 먼저 지우고 새 URL로 다시 채워요.
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const state = { urlRows:null, wbDash:null, dashBuffer:null, matchLog:[], instructions:[], resultReady:false, dashFilename:null };
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+function buildUrlMap(rows){
+  const map = new Map();
+  rows.forEach(row=>{
+    const name = row[0], url = row[1];
+    if(!name || !url) return;
+    const parts = String(name).split('_');
+    if(parts.length < 3) return;
+    const device = /PC$/.test(parts[0]) ? 'PC' : 'MO';
+    const g1 = parts[1], g2 = parts[2];
+    const suffix = parts[parts.length-1];
+    map.set([device,g1,g2,suffix].join('|'), url);
+  });
+  return map;
+}
+
+// 시트 구조상 "URL이 들어가야 하는 자리"가 항상 같은 순서로 반복되기 때문에,
+// G열에 이미 다른 값(이전 URL 등)이 들어있어도 이 순서를 기준으로 항상 다시 계산합니다.
+const AREA_TEMPLATES = {
+  PC: ['홈링크','브랜드소식','메인이미지','타이틀','서브링크1','서브링크2','썸네일1','썸네일2','썸네일3','다이나믹섬네일1','다이나믹섬네일2','다이나믹섬네일3','다이나믹섬네일4','다이나믹섬네일5'],
+  MO: ['홈링크','브랜드소식','메인이미지','타이틀','탭1-1','탭1-2','탭1-3','탭2-1','탭2-2','탭2-3','탭3-1','탭3-2','탭3-3']
+};
+
+function processSheet(ws, sheetName, device, urlMap, matchLog, instructions){
+  if(!ws['!ref']) return 0;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const template = AREA_TEMPLATES[device];
+
+  // 1) B열 그룹 마커를 기준으로 블록을 나누고, I열(체크박스)이 있는 행 = "URL이 들어가야 하는 자리"로 수집
+  const blocks = [];
+  let current = null;
+  for(let r=range.s.r; r<=range.e.r; r++){
+    const bCell = ws[XLSX.utils.encode_cell({r:r, c:1})]; // B열
+    if(bCell && bCell.v !== undefined && bCell.v !== null && String(bCell.v).trim() !== ''){
+      const bClean = String(bCell.v).replace(/[\r\n]+/g,'_');
+      const tokens = bClean.split(/[_(]/).filter(Boolean);
+      if(tokens.length >= 2 && (tokens[0]==='구사명'||tokens[0]==='신사명') && (tokens[1]==='범용'||tokens[1]==='보종')){
+        current = { group:[tokens[0], tokens[1]], rows:[] };
+        blocks.push(current);
+      }
+    }
+    if(!current) continue;
+    const iCell = ws[XLSX.utils.encode_cell({r:r, c:8})]; // I열 (체크박스 = URL 입력 자리 표시)
+    if(iCell && typeof iCell.v === 'boolean'){
+      current.rows.push(r);
+    }
+  }
+
+  // 2) 블록마다 정해진 순서(template)에 맞춰 "지우고 새로 채우기" 지시 목록만 생성 (원본 파일은 여기서 건드리지 않음)
+  let filled = 0;
+  blocks.forEach(block=>{
+    block.rows.forEach((r, idx)=>{
+      const gAddr = XLSX.utils.encode_cell({r:r, c:6}); // G열
+      if(idx >= template.length){
+        instructions.push({sheet:sheetName, addr:gAddr, action:'clear'});
+        matchLog.push({type:'url', sheet:sheetName, cell:gAddr, label:'(구조 불일치: 예상 밖 행)', url:null, ok:false});
+        return;
+      }
+      const suffix = template[idx];
+      const key = [device, block.group[0], block.group[1], suffix].join('|');
+      if(urlMap.has(key)){
+        const url = urlMap.get(key);
+        instructions.push({sheet:sheetName, addr:gAddr, action:'set', value:url});
+        matchLog.push({type:'url', sheet:sheetName, cell:gAddr, label:suffix, url, ok:true});
+        filled++;
+      } else {
+        instructions.push({sheet:sheetName, addr:gAddr, action:'clear'});
+        matchLog.push({type:'url', sheet:sheetName, cell:gAddr, label:suffix, url:null, ok:false});
+      }
+    });
+  });
+  return filled;
+}
+
+const MATERIAL_SHEET_NAME = '소재 세팅 분배';
+
+// "소재 세팅 분배" 시트의 I열(금번 세팅 소재)에서 현재 쓰이고 있는 소재명(들)을 찾아냄.
+// 헤더 행("금번 세팅 소재")과 미사용 행("-")은 제외.
+function detectMaterialNames(wb){
+  const ws = wb.Sheets[MATERIAL_SHEET_NAME];
+  if(!ws || !ws['!ref']) return [];
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const set = new Set();
+  for(let r=range.s.r; r<=range.e.r; r++){
+    const iCell = ws[XLSX.utils.encode_cell({r, c:8})]; // I열
+    if(!iCell || iCell.v===undefined || iCell.v===null) continue;
+    const v = String(iCell.v).trim();
+    if(v==='' || v==='-' || v==='금번 세팅 소재') continue;
+    set.add(v);
+  }
+  return Array.from(set);
+}
+
+// I열의 소재명이 채워진 모든 행에 대해, I열은 새 소재명으로 교체하고
+// J열은 (기존 소재명 → 새 소재명) 치환 + 끝의 날짜(MMDD)를 오늘 날짜로 교체
+function buildMaterialInstructions(wb, newName, matchLog, instructions){
+  if(!newName) return;
+  const ws = wb.Sheets[MATERIAL_SHEET_NAME];
+  if(!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+
+  const today = new Date();
+  const mmdd = String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
+
+  for(let r=range.s.r; r<=range.e.r; r++){
+    const iAddr = XLSX.utils.encode_cell({r, c:8});
+    const jAddr = XLSX.utils.encode_cell({r, c:9});
+    const iCell = ws[iAddr];
+    const jCell = ws[jAddr];
+    if(!iCell || iCell.v===undefined || iCell.v===null) continue;
+    const oldMat = String(iCell.v).trim();
+    if(oldMat==='' || oldMat==='-' || oldMat==='금번 세팅 소재') continue;
+
+    instructions.push({sheet:MATERIAL_SHEET_NAME, addr:iAddr, action:'set', value:newName});
+
+    let newJ = null;
+    if(jCell && jCell.v!==undefined && jCell.v!==null){
+      let s = String(jCell.v);
+      if(s.includes(oldMat)) s = s.split(oldMat).join(newName);
+      s = s.replace(/_(\d{2})(\d{2})$/, '_' + mmdd); // 맨 뒤 날짜(MMDD)를 오늘 날짜로
+      newJ = s;
+      instructions.push({sheet:MATERIAL_SHEET_NAME, addr:jAddr, action:'set', value:s});
+    }
+    matchLog.push({type:'material', sheet:MATERIAL_SHEET_NAME, cell:`${iAddr}/${jAddr}`, label:`${oldMat} → ${newName}`, url:newJ, ok:true});
+  }
+}
+
+function setFileName(el, name){ el.textContent = name; }
+
+function readFile(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = e => resolve(new Uint8Array(e.target.result));
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function handleFile1(file){
+  setFileName(document.getElementById('fname1'), file.name);
+  const data = await readFile(file);
+  const wb = XLSX.read(data, {type:'array'});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+  state.urlRows = rows.slice(1);
+  document.getElementById('step1').classList.add('done');
+  document.getElementById('fill1').style.width = '100%';
+  maybeRun();
+}
+
+async function handleFile2(file){
+  setFileName(document.getElementById('fname2'), file.name);
+  state.dashFilename = file.name.replace(/\.xlsx$/i, '');
+  const data = await readFile(file);
+  state.dashBuffer = data; // 원본 바이트 그대로 보관 (다운로드 시 이 원본을 직접 수정)
+  const wb = XLSX.read(data, {type:'array'});
+  state.wbDash = wb;
+  document.getElementById('step2').classList.add('done');
+  document.getElementById('fill2').style.width = '100%';
+
+  const found = detectMaterialNames(wb);
+  const hint = document.getElementById('materialHint');
+  if(found.length){
+    hint.textContent = `현재 파일에서 인식된 소재명: ${found.join(', ')} → 입력하신 텍스트로 교체돼요`;
+    hint.classList.add('found');
+    if(!document.getElementById('materialInput').value){
+      document.getElementById('materialInput').placeholder = found[0];
+    }
+  } else {
+    hint.textContent = '이 파일에는 "소재 세팅 분배" 시트에서 소재명이 인식되지 않았어요';
+    hint.classList.remove('found');
+  }
+
+  maybeRun();
+}
+
+function animateCount(el, to, duration=600){
+  const start = 0;
+  const t0 = performance.now();
+  function step(t){
+    const p = Math.min(1, (t-t0)/duration);
+    el.textContent = Math.round(start + (to-start)*p);
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function maybeRun(){
+  const line = document.getElementById('statusLine');
+  if(state.urlRows && state.wbDash){
+    line.textContent = '두 파일 확인 완료 — 매칭 실행 중...';
+    line.classList.add('ready');
+    setTimeout(runMatching, 150);
+  } else if(state.urlRows){
+    line.textContent = '최종URL 파일 확인됨 — 대시보드 파일을 올려주세요';
+  } else if(state.wbDash){
+    line.textContent = '대시보드 파일 확인됨 — 최종URL 파일을 올려주세요';
+  }
+}
+
+function runMatching(){
+  const t0 = performance.now();
+  const urlMap = buildUrlMap(state.urlRows);
+  const matchLog = [];
+  const instructions = [];
+  const wb = state.wbDash;
+
+  wb.SheetNames.forEach(name=>{
+    let device = null;
+    if(/^PC/i.test(name)) device = 'PC';
+    else if(/^MO/i.test(name)) device = 'MO';
+    if(!device) return;
+    processSheet(wb.Sheets[name], name, device, urlMap, matchLog, instructions);
+  });
+
+  const materialName = document.getElementById('materialInput').value.trim();
+  buildMaterialInstructions(wb, materialName, matchLog, instructions);
+
+  const t1 = performance.now();
+  state.matchLog = matchLog;
+  state.instructions = instructions;
+  state.resultReady = true;
+
+  const urlEntries = matchLog.filter(m=>m.type==='url');
+  const ok = urlEntries.filter(m=>m.ok).length;
+  const fail = urlEntries.filter(m=>!m.ok).length;
+  const materialCount = matchLog.filter(m=>m.type==='material').length;
+
+  let statusMsg = `매칭 완료 — URL 성공 ${ok}건 / 실패 ${fail}건`;
+  statusMsg += materialName ? ` · 소재명 변경 ${materialCount}건` : ' · 소재명 미입력';
+  document.getElementById('statusLine').textContent = statusMsg;
+
+  document.getElementById('summary').hidden = false;
+  document.getElementById('results').hidden = false;
+  document.getElementById('actions').hidden = false;
+
+  document.getElementById('statTotal').textContent = urlEntries.length;
+  animateCount(document.getElementById('statOk'), ok);
+  document.getElementById('statFail').textContent = fail;
+  document.getElementById('statFail').parentElement.style.display = fail>0 ? '' : 'none';
+  animateCount(document.getElementById('statMaterial'), materialCount);
+  document.getElementById('statTime').textContent = Math.round(t1-t0) + 'ms';
+
+  renderTable('all');
+  const toastMsg = fail>0
+    ? `매칭 완료 · URL 실패 ${fail}건을 확인해주세요`
+    : (materialName ? `매칭 완료 · 소재명 ${materialCount}건 변경했어요` : '매칭 완료 · 소재명을 입력하면 소재명도 함께 바뀌어요');
+  toast(toastMsg);
+}
+
+function renderTable(filter){
+  const tbody = document.getElementById('tbody');
+  const rows = state.matchLog.filter(m => filter==='all' ? true : (filter==='ok' ? m.ok : !m.ok));
+  if(rows.length === 0){
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-note">해당하는 항목이 없어요.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(m => `
+    <tr>
+      <td><span class="dot ${m.ok?'ok':'no'}"></span></td>
+      <td>${m.sheet}<br><span class="typetag">${m.type==='material'?'소재명 변경':'URL 매칭'}</span></td>
+      <td class="cellref">${m.cell}</td>
+      <td>${m.label}</td>
+      <td class="url">${m.ok ? m.url : '매칭 실패 — 최종URL 파일에서 해당 소재명을 찾을 수 없어요'}</td>
+    </tr>
+  `).join('');
+}
+
+document.querySelectorAll('.filters button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.filters button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTable(btn.dataset.f);
+  });
+});
+
+// upload wiring
+function wireDrop(dropId, inputId, handler){
+  const drop = document.getElementById(dropId);
+  const input = document.getElementById(inputId);
+  input.addEventListener('change', e=>{ if(e.target.files[0]) handler(e.target.files[0]); });
+  drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('drag'); });
+  drop.addEventListener('dragleave', ()=> drop.classList.remove('drag'));
+  drop.addEventListener('drop', e=>{
+    e.preventDefault(); drop.classList.remove('drag');
+    if(e.dataTransfer.files[0]) handler(e.dataTransfer.files[0]);
+  });
+}
+wireDrop('drop1','file1',handleFile1);
+wireDrop('drop2','file2',handleFile2);
+
+document.getElementById('materialInput').addEventListener('input', ()=>{
+  if(state.urlRows && state.wbDash) runMatching();
+});
+
+// ---- 원본 xlsx의 zip 구조를 직접 열어서, G열 셀 몇 개만 수정하고 나머지는 그대로 둠 (이미지/서식 보존) ----
+
+function colLettersOf(addr){ return addr.match(/[A-Za-z]+/)[0]; }
+function rowNumberOf(addr){ return addr.match(/\d+/)[0]; }
+function colLettersToNum(letters){
+  let n = 0;
+  for(let i=0;i<letters.length;i++) n = n*26 + (letters.charCodeAt(i)-64);
+  return n;
+}
+
+function applyCellInstruction(sheetDoc, ns, instr){
+  const rowNum = rowNumberOf(instr.addr);
+  const rows = sheetDoc.getElementsByTagName('row');
+  let rowEl = null;
+  for(let i=0;i<rows.length;i++){
+    if(rows[i].getAttribute('r') === rowNum){ rowEl = rows[i]; break; }
+  }
+  if(!rowEl) return false;
+
+  const cells = Array.from(rowEl.getElementsByTagName('c'));
+  let cellEl = cells.find(c => c.getAttribute('r') === instr.addr) || null;
+
+  if(instr.action === 'clear'){
+    if(cellEl){
+      while(cellEl.firstChild) cellEl.removeChild(cellEl.firstChild);
+      cellEl.removeAttribute('t');
+    }
+    return true;
+  }
+
+  // action === 'set' : 기존 셀이 있으면 서식(style)은 유지한 채 값만 교체, 없으면 새로 생성
+  if(!cellEl){
+    cellEl = sheetDoc.createElementNS(ns, 'c');
+    cellEl.setAttribute('r', instr.addr);
+    const newColNum = colLettersToNum(colLettersOf(instr.addr));
+    let inserted = false;
+    for(const c of cells){
+      if(colLettersToNum(colLettersOf(c.getAttribute('r'))) > newColNum){
+        rowEl.insertBefore(cellEl, c);
+        inserted = true;
+        break;
+      }
+    }
+    if(!inserted) rowEl.appendChild(cellEl);
+  } else {
+    while(cellEl.firstChild) cellEl.removeChild(cellEl.firstChild);
+  }
+  cellEl.setAttribute('t', 'inlineStr');
+  const isEl = sheetDoc.createElementNS(ns, 'is');
+  const tEl = sheetDoc.createElementNS(ns, 't');
+  tEl.setAttribute('xml:space', 'preserve');
+  tEl.textContent = instr.value;
+  isEl.appendChild(tEl);
+  cellEl.appendChild(isEl);
+  return true;
+}
+
+async function buildPatchedFile(){
+  const zip = await JSZip.loadAsync(state.dashBuffer);
+
+  const workbookXml = await zip.file('xl/workbook.xml').async('text');
+  const relsXml = await zip.file('xl/_rels/workbook.xml.rels').async('text');
+  const parser = new DOMParser();
+  const wbDoc = parser.parseFromString(workbookXml, 'application/xml');
+  const relsDoc = parser.parseFromString(relsXml, 'application/xml');
+
+  const sheetNameToRid = {};
+  Array.from(wbDoc.getElementsByTagName('sheet')).forEach(el=>{
+    sheetNameToRid[el.getAttribute('name')] = el.getAttribute('r:id') || el.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+  });
+  const ridToTarget = {};
+  Array.from(relsDoc.getElementsByTagName('Relationship')).forEach(el=>{
+    ridToTarget[el.getAttribute('Id')] = el.getAttribute('Target');
+  });
+
+  // 시트별로 수정 지시사항 묶기
+  const bySheet = {};
+  state.instructions.forEach(instr=>{
+    (bySheet[instr.sheet] = bySheet[instr.sheet] || []).push(instr);
+  });
+
+  for(const sheetName of Object.keys(bySheet)){
+    const rid = sheetNameToRid[sheetName];
+    if(!rid) continue;
+    let target = ridToTarget[rid];
+    if(!target) continue;
+    target = target.replace(/^\.?\//, '');
+    const fullPath = target.startsWith('xl/') ? target : ('xl/' + target);
+    const sheetFile = zip.file(fullPath);
+    if(!sheetFile) continue;
+    const sheetXml = await sheetFile.async('text');
+    const sheetDoc = parser.parseFromString(sheetXml, 'application/xml');
+    const ns = sheetDoc.documentElement.namespaceURI;
+    bySheet[sheetName].forEach(instr => applyCellInstruction(sheetDoc, ns, instr));
+    const newXml = new XMLSerializer().serializeToString(sheetDoc);
+    zip.file(fullPath, newXml);
+  }
+
+  return await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
+document.getElementById('downloadBtn').addEventListener('click', async ()=>{
+  if(!state.resultReady){ toast('먼저 매칭을 완료해주세요'); return; }
+  const btn = document.getElementById('downloadBtn');
+  const original = btn.textContent;
+  btn.textContent = '파일 생성 중...';
+  btn.disabled = true;
+  try{
+    const blob = await buildPatchedFile();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${state.dashFilename || 'dashboard'}_매칭결과.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('다운로드를 시작했어요 · 원본 이미지·서식은 그대로예요');
+  }catch(err){
+    console.error(err);
+    toast('파일 생성 중 문제가 생겼어요. 콘솔을 확인해주세요');
+  }finally{
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  location.reload();
+});
+</script>
+</body>
+</html>
