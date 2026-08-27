@@ -417,7 +417,7 @@ export default function App() {
   <div className="tab-arrow">→</div>
   <button className={`tab ${step===2?'tab-on':''}`} onClick={()=>setStep(2)}><span className="tab-num">02</span><span className="tab-label">최종 URL 완성</span></button>
   <div className="tab-arrow">→</div>
-  <button className={`tab ${step===3?'tab-on':''}`} onClick={()=>setStep(3)}><span className="tab-num">03</span><span className="tab-label">브랜드검색 대시보드</span></button>
+  <button className={`tab ${step===3?'tab-on':''}`} onClick={()=>setStep(3)}><span className="tab-num">03</span><span className="tab-label">브랜드검색 셋팅파일 URL 매칭 대시보드</span></button>
 </div>
 {step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}} landingUrlIndex={landingUrlIndex} landingIndexStatus={landingIndexStatus} codeMap={codeMap} partnerMap={partnerMap} codeMapStatus={codeMapStatus}/>}
 {step===2&&<Step2 rows1={rows1}/>}
