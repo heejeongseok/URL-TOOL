@@ -422,5 +422,7 @@ export default function App() {
 {step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}} landingUrlIndex={landingUrlIndex} landingIndexStatus={landingIndexStatus} codeMap={codeMap} partnerMap={partnerMap} codeMapStatus={codeMapStatus}/>}
 {step===2&&<Step2 rows1={rows1}/>}
 {step===3&&<iframe src={`${process.env.PUBLIC_URL}/dashboard.html`} title="브랜드검색 대시보드" style={{width:'100%',height:'85vh',border:'none',borderRadius:'12px'}}/>}
+      </main>
+    </div>
   );
 }
