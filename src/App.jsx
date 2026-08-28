@@ -421,7 +421,22 @@ export default function App() {
 </div>
 {step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}} landingUrlIndex={landingUrlIndex} landingIndexStatus={landingIndexStatus} codeMap={codeMap} partnerMap={partnerMap} codeMapStatus={codeMapStatus}/>}
 {step===2&&<Step2 rows1={rows1}/>}
-{step===3&&<iframe src={`${process.env.PUBLIC_URL}/dashboard.html`} title="브랜드검색 대시보드" style={{width:'100%',height:'85vh',border:'none',borderRadius:'12px'}}/>}
+{step===3&&<iframe
+  src={`${process.env.PUBLIC_URL}/dashboard.html`}
+  title="브랜드검색 셋팅파일 URL 매칭"
+  style={{width:'100%',border:'none',borderRadius:'12px',minHeight:'600px',display:'block'}}
+  onLoad={(e)=>{
+    const frame = e.target;
+    try{
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      const resize = ()=>{ frame.style.height = doc.documentElement.scrollHeight + 'px'; };
+      resize();
+      const ro = new ResizeObserver(resize);
+      ro.observe(doc.body);
+      window.addEventListener('resize', resize);
+    }catch(err){ /* cross-origin 등으로 실패해도 기본 높이 유지 */ }
+  }}
+/>}
       </main>
     </div>
   );
