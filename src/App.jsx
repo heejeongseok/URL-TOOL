@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
-  TEMPLATES, LANDING_OPTIONS, DEFAULT_LANDING,
+  TEMPLATES, LANDING_OPTIONS, defaultLandingFor,
   BUJONG_CFG, CONTENT_TYPES, buildRows, buildFinalUrl,
   fetchLastKidNums, appendKeywords, fetchLandingUrlIndex, fetchUrlRules, appendFinalUrls
 } from './data';
@@ -39,10 +39,13 @@ function Chip({ label, active, color, onClick }) {
   return <button onClick={onClick} className={`chip ${active ? `chip-on chip-${color}` : ''}`}>{label}</button>;
 }
 
-function LandingEditor({ dev, tpl, landing, onChange, excluded, onToggle, bjs }) {
+function LandingEditor({ dev, tpl, landing, onChange, excluded, onToggle, bjs, bujong, landingUrlIndex }) {
   const areas = TEMPLATES[dev][tpl] || [];
   if (!areas.length) return null;
-  const isHighlight = val => val !== '산출페이지' && val !== '메인';
+  const base = BUJONG_CFG[bujong]?.baseLanding?.[dev];
+  const isHighlight = val => val !== '산출페이지' && val !== '메인' && val !== base;
+  // 드롭다운 목록은 시트 [랜딩URL인덱스]의 이름을 그대로 사용 (시트에 행을 추가하면 자동으로 선택지가 늘어남)
+  const options = landingUrlIndex?.[dev] && Object.keys(landingUrlIndex[dev]).length ? Object.keys(landingUrlIndex[dev]) : LANDING_OPTIONS;
   const activeCnt = areas.filter(a => !excluded?.[a]).length;
   // 선택한 상품에 없는 그룹(예: 원데이·법인차·화물차의 범용)은 아예 표시하지 않음
   const shown = ['범용','보종'].filter(bj => !bjs?.length || bjs.includes(bj));
@@ -60,13 +63,13 @@ function LandingEditor({ dev, tpl, landing, onChange, excluded, onToggle, bjs })
             <tbody>
               {areas.map(area => {
                 const off = !!excluded?.[area];
-                const val = landing[bj]?.[area] || DEFAULT_LANDING[dev]?.[tpl]?.[bj]?.[area] || '산출페이지';
+                const val = landing[bj]?.[area] || defaultLandingFor(dev, tpl, bj, area, bujong, landingUrlIndex);
                 return (
                   <tr key={area} className={off ? 'excl' : (isHighlight(val) ? 'hl' : '')}>
                     <td className="area-name">{area}</td>
                     <td>
                       <select value={val} disabled={off} onChange={e => onChange(dev, bj, area, e.target.value)}>
-                        {LANDING_OPTIONS.map(l => <option key={l}>{l}</option>)}
+                        {(options.includes(val) ? options : [...options, val]).map(l => <option key={l} value={l}>{options.includes(l) ? l : `${l} (URL 없음)`}</option>)}
                       </select>
                     </td>
                     <td className="excl-cell">
@@ -143,7 +146,7 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
     const result = { 범용: {}, 보종: {} };
     ['범용','보종'].forEach(bj => {
       areas.forEach(a => {
-        result[bj][a] = landing[dev][bj][a] || DEFAULT_LANDING[dev]?.[tpl]?.[bj]?.[a] || '산출페이지';
+        result[bj][a] = landing[dev][bj][a] || defaultLandingFor(dev, tpl, bj, a, bujong, landingUrlIndex);
       });
     });
     return result;
@@ -254,9 +257,9 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
             <span className="hl-dot"></span> 산출페이지·메인 외 랜딩 표시 · 「−」로 이번 소재에서 안 쓰는 영역 제외
           </span>
         </div>
-        <LandingEditor dev="PC" tpl={pcTpl} landing={landing.PC} onChange={handleLandingChange} excluded={excluded.PC} onToggle={toggleExclude} bjs={bjs}/>
+        <LandingEditor dev="PC" tpl={pcTpl} landing={landing.PC} onChange={handleLandingChange} excluded={excluded.PC} onToggle={toggleExclude} bjs={bjs} bujong={bujong} landingUrlIndex={landingUrlIndex}/>
         <div style={{height:'.75rem'}}/>
-        <LandingEditor dev="MO" tpl={moTpl} landing={landing.MO} onChange={handleLandingChange} excluded={excluded.MO} onToggle={toggleExclude} bjs={bjs}/>
+        <LandingEditor dev="MO" tpl={moTpl} landing={landing.MO} onChange={handleLandingChange} excluded={excluded.MO} onToggle={toggleExclude} bjs={bjs} bujong={bujong} landingUrlIndex={landingUrlIndex}/>
       </div>
 
       <div className="card">
