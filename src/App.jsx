@@ -195,7 +195,7 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
           ))}
         </div>
         <div style={{marginTop:'.5rem',fontSize:'11px',color:'var(--text-3)'}}>
-          생성 그룹: {BUJONG_CFG[bujong].groups.map(g => `${g.name} → ${g.utm_bj}`).join(' / ')}
+          생성 그룹: {BUJONG_CFG[bujong].groups.map(g => `${g.prod} → ${g.utm_bj}`).join(' / ')}
         </div>
       </div>
 
