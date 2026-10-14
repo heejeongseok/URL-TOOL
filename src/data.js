@@ -152,14 +152,21 @@ export function applyRules(r) {
 }
 applyRules(DEFAULT_RULES);
 
-// 영역의 기본 랜딩 결정: 템플릿 기본값 → ('산출페이지'면) 소재유형 기본 랜딩. 홈링크는 항상 메인.
+// 영역의 기본 랜딩 결정
+//  · 홈링크는 항상 메인
+//  · "상품 고정" 소재유형(표5에 산출페이지 아닌 랜딩이 하나라도 있는 유형: 원데이/화물차/법인차/이륜차…)은
+//    홈링크를 뺀 모든 영역이 해당 상품 랜딩으로 고정 (랜딩URL인덱스에 없으면 산출페이지)
+//  · 그 외(자동차/TM/톡보험)는 템플릿 기본값 그대로
 export function defaultLandingFor(dev, tpl, bj, area, bujong, landingUrlIndex) {
   if (area === '홈링크') return '메인';
-  const v = DEFAULT_LANDING[dev]?.[tpl]?.[bj]?.[area] || '산출페이지';
-  if (v !== '산출페이지') return v;
-  const base = BUJONG_CFG[bujong]?.baseLanding?.[dev];
-  if (base && base !== '산출페이지' && (!landingUrlIndex || landingUrlIndex[dev]?.[base])) return base;
-  return '산출페이지';
+  const cfg = BUJONG_CFG[bujong];
+  const bl = cfg?.baseLanding;
+  const fixed = !!bl && (bl.PC !== '산출페이지' || bl.MO !== '산출페이지');
+  if (fixed) {
+    const base = bl[dev];
+    return base && (!landingUrlIndex || landingUrlIndex[dev]?.[base]) ? base : '산출페이지';
+  }
+  return DEFAULT_LANDING[dev]?.[tpl]?.[bj]?.[area] || '산출페이지';
 }
 
 export function getKidCode(dev, prod) {
