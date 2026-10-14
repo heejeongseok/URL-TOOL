@@ -3,13 +3,13 @@ export const GAS_URL = 'https://script.google.com/macros/s/AKfycby2_UG5uFuIDsAIB
 export const TEMPLATES = {
   PC: {
     '일반형': ['홈링크','브랜드소식','메인이미지','타이틀','서브링크1','서브링크2','서브링크3','썸네일1','썸네일2','썸네일3'],
-    '일반형-2구': ['홈링크','메인이미지','타이틀','서브링크1','서브링크2','서브링크3','썸네일1','썸네일2','썸네일3','다이나믹섬네일1','다이나믹섬네일2'],
-    '일반형-5구': ['홈링크','브랜드소식','메인이미지','타이틀','서브링크1','서브링크2','썸네일1','썸네일2','썸네일3','다이나믹섬네일1','다이나믹섬네일2','다이나믹섬네일3','다이나믹섬네일4','다이나믹섬네일5'],
+    '일반형-2구': ['홈링크','브랜드소식','메인이미지','타이틀','서브링크1','서브링크2','서브링크3','썸네일1','썸네일2','썸네일3','다이나믹섬네일1','다이나믹섬네일2'],
+    '일반형-5구': ['홈링크','브랜드소식','메인이미지','타이틀','서브링크1','서브링크2','서브링크3','썸네일1','썸네일2','썸네일3','다이나믹섬네일1','다이나믹섬네일2','다이나믹섬네일3','다이나믹섬네일4','다이나믹섬네일5'],
     '없음': []
   },
   MO: {
-    '일반형-버튼': ['홈링크','브랜드소식','메인이미지','타이틀','메뉴1','메뉴2','메뉴3','메뉴4','썸네일1','썸네일2','썸네일3'],
-    '일반형-리스팅': ['브랜드소식','서브링크1','서브링크2','서브링크3','컨텐츠1','컨텐츠2','버튼1','버튼2','썸네일1','썸네일2','썸네일3'],
+    '일반형-버튼': ['홈링크','브랜드소식','메인이미지','타이틀','메뉴1','메뉴2','메뉴3','메뉴4'],
+    '일반형-리스팅': ['브랜드소식','서브링크1','서브링크2','서브링크3','컨텐츠1','컨텐츠2','컨텐츠3','버튼1','버튼2','버튼3','썸네일1','썸네일2','썸네일3'],
     '섬네일형-탭': ['홈링크','브랜드소식','메인이미지','타이틀','탭1-1','탭1-2','탭1-3','탭2-1','탭2-2','탭2-3','탭3-1','탭3-2','탭3-3'],
     '섬네일형-플리킹': ['홈링크','브랜드소식','메인이미지','타이틀','썸네일1','썸네일2','썸네일3','썸네일4','썸네일5'],
     '없음': []
@@ -158,9 +158,16 @@ export const AREA_EN = {
 
 // [키워드ID] 시트에서 PC/MO 마지막 번호 가져오기
 // PC: F열 번호, MO: M열 번호
+// 응답이 없을 때 무한 로딩되지 않도록 타임아웃 적용 (기본 15초)
+function fetchWithTimeout(url, ms = 15000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { redirect: 'follow', signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
 export async function fetchLastKidNums() {
   try {
-    const res = await fetch(`${GAS_URL}?action=getLastKidNums`, { redirect: 'follow' });
+    const res = await fetchWithTimeout(`${GAS_URL}?action=getLastKidNums`);
     const data = await res.json();
     return { pc: data.pc, mo: data.mo };
   } catch {
@@ -220,7 +227,7 @@ export async function appendKeywords(rows, pcStart, moStart) {
 // 구글 시트 [설정_URL규칙]에서 규칙 가져오기 → applyRules로 반영
 export async function fetchUrlRules() {
   try {
-    const res = await fetch(`${GAS_URL}?action=getUrlRules`, { redirect: 'follow' });
+    const res = await fetchWithTimeout(`${GAS_URL}?action=getUrlRules`);
     const data = await res.json();
     if (data.error) return { ok:false, error:data.error };
     return { ok: applyRules(data), error: '규칙이 비어 있음' };
@@ -250,12 +257,12 @@ export async function fetchLandingUrlIndex() {
 
 // URL 빌드
 // kidPcStart/kidMoStart는 appendKeywords에서 처리 (buildRows는 번호 없이 행만 생성)
-export function buildRows({ sojae, date, bujong, contType, pcTpl, moTpl, landingPC, landingMO, landingUrlIndex }) {
+export function buildRows({ sojae, date, bujong, contType, pcTpl, moTpl, landingPC, landingMO, landingUrlIndex, excluded = {} }) {
   const cfg = BUJONG_CFG[bujong];
   const content = contType || cfg.defaultContent || 'general';
   const devs = [
-    { dev:'PC', areas: TEMPLATES.PC[pcTpl] || [], sel: landingPC, index: landingUrlIndex?.PC || {} },
-    { dev:'MO', areas: TEMPLATES.MO[moTpl] || [], sel: landingMO, index: landingUrlIndex?.MO || {} },
+    { dev:'PC', areas: (TEMPLATES.PC[pcTpl] || []).filter(a => !excluded.PC?.[a]), sel: landingPC, index: landingUrlIndex?.PC || {} },
+    { dev:'MO', areas: (TEMPLATES.MO[moTpl] || []).filter(a => !excluded.MO?.[a]), sel: landingMO, index: landingUrlIndex?.MO || {} },
   ];
   const rows = [];
 
