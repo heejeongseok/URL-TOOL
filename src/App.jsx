@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   TEMPLATES, LANDING_OPTIONS, DEFAULT_LANDING,
-  BUJONG_CFG, AREA_EN, buildRows, buildFinalUrl,
-  fetchLastKidNums, appendKeywords, fetchLandingUrlIndex, fetchSettings, appendFinalUrls, getPartnerCode
+  BUJONG_CFG, CONTENT_TYPES, buildRows, buildFinalUrl,
+  fetchLastKidNums, appendKeywords, fetchLandingUrlIndex, fetchUrlRules, appendFinalUrls
 } from './data';
 import './App.css';
 
@@ -76,10 +76,20 @@ function LandingEditor({ dev, tpl, landing, onChange }) {
   );
 }
 
-function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, partnerMap, codeMapStatus }) {
+function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, rulesStatus }) {
   const [sojae, setSojae] = useState('');
   const [date, setDate] = useState(today());
   const [bujong, setBujong] = useState('자동차');
+  // 시트 규칙이 로드/갱신되면 선택값이 유효한지 확인
+  useEffect(() => {
+    if (rulesLoaded === null) return;
+    const first = Object.keys(BUJONG_CFG)[0];
+    const cur = BUJONG_CFG[bujong] ? bujong : first;
+    if (cur !== bujong) setBujong(cur);
+    setContType(BUJONG_CFG[cur]?.defaultContent || 'general');
+    // eslint-disable-next-line
+  }, [rulesLoaded]);
+  const [contType, setContType] = useState('general'); // utm_content 앞부분 (일반/특약/한문철...)
   const [pcTpl, setPcTpl] = useState('일반형-5구');
   const [moTpl, setMoTpl] = useState('섬네일형-탭');
   const [landing, setLanding] = useState({ PC: { 범용:{}, 보종:{} }, MO: { 범용:{}, 보종:{} } });
@@ -133,12 +143,10 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
     setLoading(true);
     try {
       const rows = buildRows({
-        sojae, date, bujong, pcTpl, moTpl,
+        sojae, date, bujong, contType, pcTpl, moTpl,
         landingPC: getEffectiveLanding('PC'),
         landingMO: getEffectiveLanding('MO'),
         landingUrlIndex,
-        codeMap,
-        partnerMap,
       });
       onRowsBuilt(rows);
 
@@ -179,11 +187,27 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
       </div>
 
       <div className="card">
-        <div className="card-title">보종</div>
+        <div className="card-title">상품 구분 (utm_campaign)</div>
         <div className="chip-row">
           {Object.keys(BUJONG_CFG).map(b => (
-            <Chip key={b} label={{'자동차':'🚗 자동차','이륜차':'🏍 이륜차','법인차':'🏢 법인차','화물차':'🚚 화물차','원데이':'📅 원데이','톡보험':'💬 톡보험'}[b]} active={bujong===b} color="dark" onClick={()=>setBujong(b)}/>
+            <Chip key={b} label={BUJONG_CFG[b].label} active={bujong===b} color="dark"
+              onClick={()=>{ setBujong(b); setContType(BUJONG_CFG[b].defaultContent || 'general'); }}/>
           ))}
+        </div>
+        <div style={{marginTop:'.5rem',fontSize:'11px',color:'var(--text-3)'}}>
+          생성 그룹: {BUJONG_CFG[bujong].groups.map(g => `${g.name} → ${g.utm_bj}`).join(' / ')}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">콘텐츠 구분 (utm_content)</div>
+        <div className="chip-row">
+          {CONTENT_TYPES.map(c => (
+            <Chip key={c.value} label={`${c.label} (${c.value})`} active={contType===c.value} color="dark" onClick={()=>setContType(c.value)}/>
+          ))}
+        </div>
+        <div style={{marginTop:'.5rem',fontSize:'11px',color:'var(--text-3)'}}>
+          예) utm_content={contType}_{date}_homelink
         </div>
       </div>
 
@@ -248,7 +272,7 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
           {sheetLoading ? '⏳ 구글 시트에서 키워드ID 불러오는 중...' : sheetStatus}
         </div>
         <div className={`sheet-status ${landingUrlIndex ? 'ok' : ''}`} style={{marginTop:'.5rem'}}>{landingIndexStatus}</div>
-        <div className={`sheet-status ${codeMap ? 'ok' : ''}`} style={{marginTop:'.5rem'}}>{codeMapStatus}</div>
+        <div className={`sheet-status ${rulesLoaded ? 'ok' : ''}`} style={{marginTop:'.5rem'}}>{rulesStatus}</div>
 
         {landingUrlIndex && (
           <details style={{marginTop:'.5rem'}}>
@@ -281,7 +305,7 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, codeMap, part
       <button
         className="btn btn-primary btn-lg"
         onClick={generate}
-        disabled={loading || sheetLoading}
+        disabled={loading || sheetLoading || rulesLoaded === null}
       >
         {sheetLoading ? '⏳ 시트 로딩 중... (잠시만요)' : loading ? '생성 중...' : '⬇ 에카 업로드용 파일 생성 & 다운로드'}
       </button>
@@ -375,9 +399,8 @@ export default function App() {
   const [rows1, setRows1] = useState([]);
   const [landingUrlIndex, setLandingUrlIndex] = useState(null);
   const [landingIndexStatus, setLandingIndexStatus] = useState('랜딩URL 인덱스 로딩 중...');
-  const [codeMap, setCodeMap] = useState(null);
-  const [partnerMap, setPartnerMap] = useState(null);
-  const [codeMapStatus, setCodeMapStatus] = useState('설정 코드맵 로딩 중...');
+  const [rulesLoaded, setRulesLoaded] = useState(null); // null=로딩중, true=시트 규칙, false=내장 기본값
+  const [rulesStatus, setRulesStatus] = useState('URL 규칙 시트 로딩 중...');
 
   useEffect(() => {
     fetchLandingUrlIndex().then(data => {
@@ -390,15 +413,14 @@ export default function App() {
         setLandingIndexStatus('⚠ 랜딩URL 인덱스 로드 실패 — 구글 시트 GAS 설정을 확인해주세요');
       }
     });
-    fetchSettings().then(data => {
-      if (data?.codeMap) {
-        setCodeMap(data.codeMap);
-        setPartnerMap(data.partnerMap || null);
-        const count = Object.keys(data.codeMap).length;
-        const pCount = Object.keys(data.partnerMap || {}).length;
-        setCodeMapStatus(`✓ 코드맵 로드됨 — ${count}개 조합 / 파트너코드 ${pCount}개`);
+    // 캠페인/콘텐츠/키워드 코드/파트너코드 규칙은 구글 시트 [설정_URL규칙]에서 읽음
+    fetchUrlRules().then(r => {
+      if (r.ok) {
+        setRulesStatus(`✓ URL 규칙 시트 반영됨 — 소재유형 ${Object.keys(BUJONG_CFG).length}개 / 콘텐츠 ${CONTENT_TYPES.length}개`);
+        setRulesLoaded(true);
       } else {
-        setCodeMapStatus('⚠ 코드맵 로드 실패 — [설정] 시트 GAS 설정을 확인해주세요');
+        setRulesStatus(`⚠ URL 규칙 시트 로드 실패(${r.error}) — 내장 기본값으로 진행합니다. [설정_URL규칙] 시트/GAS 배포를 확인하세요`);
+        setRulesLoaded(false);
       }
     });
   }, []);
@@ -419,7 +441,7 @@ export default function App() {
   <div className="tab-arrow">→</div>
   <button className={`tab ${step===3?'tab-on':''}`} onClick={()=>setStep(3)}><span className="tab-num">03</span><span className="tab-label">브랜드검색 셋팅파일 URL 매칭</span></button>
 </div>
-{step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}} landingUrlIndex={landingUrlIndex} landingIndexStatus={landingIndexStatus} codeMap={codeMap} partnerMap={partnerMap} codeMapStatus={codeMapStatus}/>}
+{step===1&&<Step1 onRowsBuilt={rows=>{setRows1(rows);}} landingUrlIndex={landingUrlIndex} landingIndexStatus={landingIndexStatus} rulesLoaded={rulesLoaded} rulesStatus={rulesStatus}/>}
 {step===2&&<Step2 rows1={rows1}/>}
 {step===3&&<iframe
   src={`${process.env.PUBLIC_URL}/dashboard.html`}
