@@ -39,15 +39,17 @@ function Chip({ label, active, color, onClick }) {
   return <button onClick={onClick} className={`chip ${active ? `chip-on chip-${color}` : ''}`}>{label}</button>;
 }
 
-function LandingEditor({ dev, tpl, landing, onChange, excluded, onToggle }) {
+function LandingEditor({ dev, tpl, landing, onChange, excluded, onToggle, bjs }) {
   const areas = TEMPLATES[dev][tpl] || [];
   if (!areas.length) return null;
   const isHighlight = val => val !== '산출페이지' && val !== '메인';
   const activeCnt = areas.filter(a => !excluded?.[a]).length;
+  // 선택한 상품에 없는 그룹(예: 원데이·법인차·화물차의 범용)은 아예 표시하지 않음
+  const shown = ['범용','보종'].filter(bj => !bjs?.length || bjs.includes(bj));
 
   return (
-    <div className="landing-block-wrap">
-      {['범용','보종'].map(bj => (
+    <div className="landing-block-wrap" style={shown.length === 1 ? { gridTemplateColumns:'1fr' } : undefined}>
+      {shown.map(bj => (
         <div key={bj} className="landing-block">
           <div className={`landing-header landing-header-${dev.toLowerCase()}`}>
             <span className={`badge badge-${dev.toLowerCase()}`}>{dev}</span>
@@ -87,6 +89,7 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
   const [date, setDate] = useState(today());
   const [bujong, setBujong] = useState('자동차');
   const [excluded, setExcluded] = useState({ PC:{}, MO:{} }); // 영역별 제외(−) 상태
+  const bjs = [...new Set((BUJONG_CFG[bujong]?.groups || []).map(g => g.bj))]; // 이 상품이 만드는 그룹(범용/보종)
   const toggleExclude = (dev, area) => setExcluded(prev => ({ ...prev, [dev]: { ...prev[dev], [area]: !prev[dev][area] } }));
   // 시트 규칙이 로드/갱신되면 선택값이 유효한지 확인
   useEffect(() => {
@@ -195,7 +198,11 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
       </div>
 
       <div className="card">
-        <div className="card-title">상품 구분 (utm_campaign)</div>
+        <div className="card-title">① 상품 구분 (utm_campaign)</div>
+        <div className="card-desc">
+          어떤 <b>상품</b>의 소재인지 고르세요. 상품에 따라 URL의 캠페인값·파트너코드·키워드ID 코드가 자동으로 정해져요.
+          자동차는 <b>범용(brand)</b>과 <b>보종(car_personal)</b> 두 그룹이 함께 만들어지고, 나머지 상품은 <b>보종 한 그룹</b>만 만들어져요.
+        </div>
         <div className="chip-row">
           {Object.keys(BUJONG_CFG).map(b => (
             <Chip key={b} label={BUJONG_CFG[b].label} active={bujong===b} color="dark"
@@ -208,7 +215,12 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
       </div>
 
       <div className="card">
-        <div className="card-title">콘텐츠 구분 (utm_content)</div>
+        <div className="card-title">② 콘텐츠 구분 (utm_content)</div>
+        <div className="card-desc">
+          상품과 별개로 <b>소재의 종류</b>를 나누는 값이에요(utm_content 앞부분).
+          자동차·TM·톡보험 소재를 세부적으로 나눌 때 쓰고, 화물차·법인차·원데이·이륜차처럼 나눌 필요가 없으면 <b>일반</b>으로 두세요.
+          (TM·톡보험 상품을 고르면 해당 값이 자동 선택돼요)
+        </div>
         <div className="chip-row">
           {CONTENT_TYPES.map(c => (
             <Chip key={c.value} label={`${c.label} (${c.value})`} active={contType===c.value} color="dark" onClick={()=>setContType(c.value)}/>
@@ -242,9 +254,9 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
             <span className="hl-dot"></span> 산출페이지·메인 외 랜딩 표시 · 「−」로 이번 소재에서 안 쓰는 영역 제외
           </span>
         </div>
-        <LandingEditor dev="PC" tpl={pcTpl} landing={landing.PC} onChange={handleLandingChange} excluded={excluded.PC} onToggle={toggleExclude}/>
+        <LandingEditor dev="PC" tpl={pcTpl} landing={landing.PC} onChange={handleLandingChange} excluded={excluded.PC} onToggle={toggleExclude} bjs={bjs}/>
         <div style={{height:'.75rem'}}/>
-        <LandingEditor dev="MO" tpl={moTpl} landing={landing.MO} onChange={handleLandingChange} excluded={excluded.MO} onToggle={toggleExclude}/>
+        <LandingEditor dev="MO" tpl={moTpl} landing={landing.MO} onChange={handleLandingChange} excluded={excluded.MO} onToggle={toggleExclude} bjs={bjs}/>
       </div>
 
       <div className="card">
