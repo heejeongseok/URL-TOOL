@@ -101,6 +101,19 @@ export const DEFAULT_RULES = {
     { landing:'화물차', pc:'C735', mo:'C735' },
     { landing:'법인차', pc:'CB03', mo:'CB03' },
     { landing:'한문철', pc:'CA85', mo:'CA85' },
+    { landing:'법인이륜차', pc:'C614', mo:'C614' },
+    { landing:'법인자동차', pc:'CB03', mo:'CB03' },
+  ],
+  // 소재유형별 기본 랜딩 (영역 기본값이 '산출페이지'인 곳에 적용. 홈링크는 항상 메인). 랜딩URL인덱스에 없는 이름이면 산출페이지 사용
+  defaultLandings: [
+    { type:'자동차', pc:'산출페이지', mo:'산출페이지' },
+    { type:'TM', pc:'산출페이지', mo:'산출페이지' },
+    { type:'원데이', pc:'산출페이지', mo:'원데이' },
+    { type:'화물차', pc:'산출페이지', mo:'화물차' },
+    { type:'법인차', pc:'법인자동차', mo:'법인차' },
+    { type:'이륜차(개인용)', pc:'이륜차', mo:'이륜차' },
+    { type:'이륜차(법인용)', pc:'법인이륜차', mo:'이륜차' },
+    { type:'톡보험', pc:'산출페이지', mo:'산출페이지' },
   ],
 };
 
@@ -123,7 +136,7 @@ export function applyRules(r) {
     const type = ok(g.type); if (!type || !ok(g.utm)) continue;
     if (!BUJONG_CFG[type]) {
       const def = CONTENT_TYPES.find(c => c.defaultType.split(',').map(x => x.trim()).includes(type));
-      BUJONG_CFG[type] = { label:type, defaultContent: def?.value || CONTENT_TYPES[0]?.value || 'general', groups:[] };
+      BUJONG_CFG[type] = { label:type, defaultContent: def?.value || CONTENT_TYPES[0]?.value || 'general', baseLanding:{ PC:'산출페이지', MO:'산출페이지' }, groups:[] };
     }
     BUJONG_CFG[type].groups.push({
       name: ok(g.name), prod: ok(g.prod), bj: ok(g.bj) === '범용' ? '범용' : '보종',
@@ -131,11 +144,23 @@ export function applyRules(r) {
       moOnly: ok(g.pcOn).toUpperCase() === 'X',
     });
   }
+  const dl = r.defaultLandings?.length ? r.defaultLandings : DEFAULT_RULES.defaultLandings;
+  dl.forEach(d => { const c = BUJONG_CFG[ok(d.type)]; if (c) c.baseLanding = { PC: ok(d.pc) || '산출페이지', MO: ok(d.mo) || '산출페이지' }; });
   (r.kidCodes || []).forEach(k => { const d = ok(k.dev).toUpperCase(); if (KID_CODE[d] && ok(k.prod) && ok(k.code)) KID_CODE[d][ok(k.prod)] = ok(k.code); });
   (r.landingPtnr || []).forEach(l => { if (ok(l.landing)) LANDING_PTNR[ok(l.landing)] = { PC: ok(l.pc), MO: ok(l.mo) }; });
   return Object.keys(BUJONG_CFG).length > 0;
 }
 applyRules(DEFAULT_RULES);
+
+// 영역의 기본 랜딩 결정: 템플릿 기본값 → ('산출페이지'면) 소재유형 기본 랜딩. 홈링크는 항상 메인.
+export function defaultLandingFor(dev, tpl, bj, area, bujong, landingUrlIndex) {
+  if (area === '홈링크') return '메인';
+  const v = DEFAULT_LANDING[dev]?.[tpl]?.[bj]?.[area] || '산출페이지';
+  if (v !== '산출페이지') return v;
+  const base = BUJONG_CFG[bujong]?.baseLanding?.[dev];
+  if (base && base !== '산출페이지' && (!landingUrlIndex || landingUrlIndex[dev]?.[base])) return base;
+  return '산출페이지';
+}
 
 export function getKidCode(dev, prod) {
   const t = KID_CODE[dev];
