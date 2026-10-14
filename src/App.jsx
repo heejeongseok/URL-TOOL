@@ -39,10 +39,11 @@ function Chip({ label, active, color, onClick }) {
   return <button onClick={onClick} className={`chip ${active ? `chip-on chip-${color}` : ''}`}>{label}</button>;
 }
 
-function LandingEditor({ dev, tpl, landing, onChange }) {
+function LandingEditor({ dev, tpl, landing, onChange, excluded, onToggle }) {
   const areas = TEMPLATES[dev][tpl] || [];
   if (!areas.length) return null;
   const isHighlight = val => val !== '산출페이지' && val !== '메인';
+  const activeCnt = areas.filter(a => !excluded?.[a]).length;
 
   return (
     <div className="landing-block-wrap">
@@ -51,19 +52,24 @@ function LandingEditor({ dev, tpl, landing, onChange }) {
           <div className={`landing-header landing-header-${dev.toLowerCase()}`}>
             <span className={`badge badge-${dev.toLowerCase()}`}>{dev}</span>
             <span className={`badge badge-${bj==='범용'?'brand':'car'}`}>{bj}</span>
-            <span className="landing-count">{areas.length}개</span>
+            <span className="landing-count">{activeCnt}개{activeCnt !== areas.length ? ` (제외 ${areas.length - activeCnt})` : ''}</span>
           </div>
           <table className="landing-table">
             <tbody>
               {areas.map(area => {
+                const off = !!excluded?.[area];
                 const val = landing[bj]?.[area] || DEFAULT_LANDING[dev]?.[tpl]?.[bj]?.[area] || '산출페이지';
                 return (
-                  <tr key={area} className={isHighlight(val) ? 'hl' : ''}>
+                  <tr key={area} className={off ? 'excl' : (isHighlight(val) ? 'hl' : '')}>
                     <td className="area-name">{area}</td>
                     <td>
-                      <select value={val} onChange={e => onChange(dev, bj, area, e.target.value)}>
+                      <select value={val} disabled={off} onChange={e => onChange(dev, bj, area, e.target.value)}>
                         {LANDING_OPTIONS.map(l => <option key={l}>{l}</option>)}
                       </select>
+                    </td>
+                    <td className="excl-cell">
+                      <button type="button" className={`btn-excl ${off ? 'btn-excl-on' : ''}`}
+                        title={off ? '다시 포함' : '이번 소재에서 제외'} onClick={() => onToggle(dev, area)}>{off ? '＋' : '−'}</button>
                     </td>
                   </tr>
                 );
@@ -80,6 +86,8 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
   const [sojae, setSojae] = useState('');
   const [date, setDate] = useState(today());
   const [bujong, setBujong] = useState('자동차');
+  const [excluded, setExcluded] = useState({ PC:{}, MO:{} }); // 영역별 제외(−) 상태
+  const toggleExclude = (dev, area) => setExcluded(prev => ({ ...prev, [dev]: { ...prev[dev], [area]: !prev[dev][area] } }));
   // 시트 규칙이 로드/갱신되면 선택값이 유효한지 확인
   useEffect(() => {
     if (rulesLoaded === null) return;
@@ -143,7 +151,7 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
     setLoading(true);
     try {
       const rows = buildRows({
-        sojae, date, bujong, contType, pcTpl, moTpl,
+        sojae, date, bujong, contType, pcTpl, moTpl, excluded,
         landingPC: getEffectiveLanding('PC'),
         landingMO: getEffectiveLanding('MO'),
         landingUrlIndex,
@@ -231,12 +239,12 @@ function Step1({ onRowsBuilt, landingUrlIndex, landingIndexStatus, rulesLoaded, 
         <div className="card-title-row">
           <span className="card-title">영역별 랜딩 설정</span>
           <span className="card-hint">
-            <span className="hl-dot"></span> 산출페이지·메인 외 랜딩 표시
+            <span className="hl-dot"></span> 산출페이지·메인 외 랜딩 표시 · 「−」로 이번 소재에서 안 쓰는 영역 제외
           </span>
         </div>
-        <LandingEditor dev="PC" tpl={pcTpl} landing={landing.PC} onChange={handleLandingChange}/>
+        <LandingEditor dev="PC" tpl={pcTpl} landing={landing.PC} onChange={handleLandingChange} excluded={excluded.PC} onToggle={toggleExclude}/>
         <div style={{height:'.75rem'}}/>
-        <LandingEditor dev="MO" tpl={moTpl} landing={landing.MO} onChange={handleLandingChange}/>
+        <LandingEditor dev="MO" tpl={moTpl} landing={landing.MO} onChange={handleLandingChange} excluded={excluded.MO} onToggle={toggleExclude}/>
       </div>
 
       <div className="card">
