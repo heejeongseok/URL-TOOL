@@ -95,3 +95,12 @@ textarea{resize:vertical;font-family:'JetBrains Mono',monospace;font-size:11px}
 
 a.tab{text-decoration:none}
 
+/* 영역 제외(−) 버튼 */
+.excl-cell{width:34px;text-align:center}
+.btn-excl{width:24px;height:24px;border:1px solid var(--border);border-radius:50%;background:var(--surface);color:var(--text-3);cursor:pointer;font-size:14px;line-height:1;padding:0}
+.btn-excl:hover{border-color:var(--red);color:var(--red)}
+.btn-excl-on{background:var(--bg);color:var(--blue)}
+.btn-excl-on:hover{border-color:var(--blue);color:var(--blue)}
+.landing-table tr.excl td{opacity:.45}
+.landing-table tr.excl td.excl-cell{opacity:1}
+.landing-table tr.excl .area-name{text-decoration:line-through}
