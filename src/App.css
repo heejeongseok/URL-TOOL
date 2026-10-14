@@ -104,3 +104,6 @@ a.tab{text-decoration:none}
 .landing-table tr.excl td{opacity:.45}
 .landing-table tr.excl td.excl-cell{opacity:1}
 .landing-table tr.excl .area-name{text-decoration:line-through}
+
+.card-desc{font-size:12px;color:var(--text-2);line-height:1.65;margin:-.25rem 0 .75rem;padding:.5rem .75rem;background:var(--bg);border-radius:var(--radius-sm)}
+.card-desc b{color:var(--text);font-weight:600}
