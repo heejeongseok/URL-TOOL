@@ -106,6 +106,9 @@
     color:var(--ink-soft);
   }
   .material-hint.found{color:var(--brand-dark);}
+  .material-len{font-family:var(--mono);font-size:12px;color:var(--brand-dark);}
+  .material-len.over{color:#d64545;font-weight:600;}
+  #materialInput.over{border-color:#d64545;}
 
   /* Pipeline */
   .pipeline{
@@ -380,10 +383,12 @@
     <div class="material-label">
       <span class="material-title">이번 소재명</span>
       <span class="material-desc">"소재 세팅 분배" 시트의 I열(금번 세팅 소재)·J열(소재명 변경)을 이 텍스트로 자동 교체해요.
-        뒤쪽 날짜(0819 등)는 대시보드를 실행하는 오늘 날짜로 자동으로 바뀌어요.</span>
+        뒤쪽 날짜(0819 등)는 대시보드를 실행하는 오늘 날짜로 자동으로 바뀌어요.
+        매체 제한 때문에 J열 소재명이 30자를 넘으면 빨간색으로 알려드려요.</span>
     </div>
     <input type="text" id="materialInput" placeholder="예: 특약중복적용">
     <div class="material-hint" id="materialHint">파일을 올리면 현재 소재명을 알려드려요</div>
+    <div class="material-len" id="materialLen" hidden></div>
   </section>
 
   <section class="pipeline" id="pipeline">
@@ -613,6 +618,7 @@ function processSheet(ws, sheetName, device, urlMap, matchLog, instructions, dia
 }
 
 const MATERIAL_SHEET_NAME = '소재 세팅 분배';
+const MAX_NAME_LEN = 30; // 매체(네이버) 소재명 글자수 제한
 
 // "소재 세팅 분배" 시트의 I열(금번 세팅 소재)에서 현재 쓰이고 있는 소재명(들)을 찾아냄.
 // 헤더 행("금번 세팅 소재")과 미사용 행("-")은 제외.
@@ -666,7 +672,11 @@ function buildMaterialInstructions(wb, newName, matchLog, instructions){
       newJ = s;
       instructions.push({sheet:MATERIAL_SHEET_NAME, addr:jAddr, action:'set', value:s});
     }
-    matchLog.push({type:'material', sheet:MATERIAL_SHEET_NAME, cell:`${iAddr}/${jAddr}`, label:`${oldMat} → ${newName}`, url:newJ, ok:true});
+    const len = newJ==null ? 0 : [...newJ].length;
+    const over = len > MAX_NAME_LEN;
+    // 이 행에서 소재명에 쓸 수 있는 최대 글자수 = 30 - (소재명을 뺀 나머지 글자수)
+    const allowed = newJ==null ? null : MAX_NAME_LEN - (len - [...newName].length * Math.max(1, newJ.split(newName).length-1));
+    matchLog.push({type:'material', sheet:MATERIAL_SHEET_NAME, cell:`${iAddr}/${jAddr}`, label:`${oldMat} → ${newName}`, url:newJ, ok:!over, len, over, allowed});
   }
 }
 
@@ -777,6 +787,8 @@ function runMatching(){
 
   let statusMsg = `매칭 완료 — URL 성공 ${ok}건 / 실패 ${fail}건`;
   statusMsg += materialName ? ` · 소재명 변경 ${materialCount}건` : ' · 소재명 미입력';
+  const overCount = matchLog.filter(m=>m.type==='material' && m.over).length;
+  if(overCount) statusMsg += ` · 30자 초과 ${overCount}건`;
   document.getElementById('statusLine').textContent = statusMsg;
 
   document.getElementById('summary').hidden = false;
@@ -791,10 +803,33 @@ function runMatching(){
   document.getElementById('statTime').textContent = Math.round(t1-t0) + 'ms';
 
   renderTable('all');
-  const toastMsg = fail>0
+  renderMaterialLen(matchLog.filter(m=>m.type==='material'), materialName);
+  const toastMsg = overCount>0
+    ? `소재명이 30자를 넘는 행이 ${overCount}건 있어요 — 소재명을 줄여주세요`
+    : fail>0
     ? `매칭 완료 · URL 실패 ${fail}건을 확인해주세요`
     : (materialName ? `매칭 완료 · 소재명 ${materialCount}건 변경했어요` : '매칭 완료 · 소재명을 입력하면 소재명도 함께 바뀌어요');
   toast(toastMsg);
+}
+
+function renderMaterialLen(entries, materialName){
+  const el = document.getElementById('materialLen');
+  const input = document.getElementById('materialInput');
+  const withJ = entries.filter(m=>m.url!=null);
+  state.overNames = withJ.filter(m=>m.over);
+  if(!materialName || !withJ.length){ el.hidden = true; input.classList.remove('over'); return; }
+  const longest = withJ.reduce((a,m)=>m.len>a.len?m:a);
+  const minAllowed = Math.min(...withJ.map(m=>m.allowed));
+  el.hidden = false;
+  if(state.overNames.length){
+    el.className = 'material-len over';
+    input.classList.add('over');
+    el.textContent = `30자 초과 ${state.overNames.length}건 — 가장 긴 J열 ${longest.len}자 (${longest.url}). 소재명을 ${Math.max(0,minAllowed)}자 이내로 줄여주세요`;
+  } else {
+    el.className = 'material-len';
+    input.classList.remove('over');
+    el.textContent = `J열 소재명 글자수 OK — 가장 긴 것 ${longest.len}/30자 · 소재명은 ${minAllowed}자까지 넣을 수 있어요`;
+  }
 }
 
 function renderDiag(diag, urlCount, conflicts){
@@ -827,7 +862,7 @@ function renderTable(filter){
       <td>${m.sheet}<br><span class="typetag">${m.type==='material'?'소재명 변경':'URL 매칭'}</span></td>
       <td class="cellref">${m.cell}</td>
       <td>${m.label}</td>
-      <td class="url">${m.ok ? m.url : '매칭 실패 — 최종URL 파일에서 해당 소재명을 찾을 수 없어요'}</td>
+      <td class="url">${m.type==='material' ? `${m.url??''}${m.url!=null?` <b style="color:${m.over?'#d64545':'inherit'}">(${m.len}자${m.over?' · 30자 초과':''})</b>`:''}` : (m.ok ? m.url : '매칭 실패 — 최종URL 파일에서 해당 소재명을 찾을 수 없어요')}</td>
     </tr>
   `).join('');
 }
@@ -964,8 +999,22 @@ async function buildPatchedFile(){
   return await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 
+// 결과 파일명: DB손해보험_브랜드검색_셋팅용파일_{소재명}_{YYMMDD}.xlsx
+function resultFileName(){
+  const d = new Date();
+  const yymmdd = String(d.getFullYear()).slice(2) + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  let mat = document.getElementById('materialInput').value.trim();
+  if(!mat && state.wbDash){ const found = detectMaterialNames(state.wbDash); mat = found[0] || ''; }
+  mat = mat.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '');
+  return `DB손해보험_브랜드검색_셋팅용파일_${mat ? mat + '_' : ''}${yymmdd}.xlsx`;
+}
+
 document.getElementById('downloadBtn').addEventListener('click', async ()=>{
   if(!state.resultReady){ toast('먼저 매칭을 완료해주세요'); return; }
+  if(state.overNames && state.overNames.length){
+    const ok = confirm(`J열 소재명 중 ${state.overNames.length}건이 30자를 넘어요 (매체 제한).\n예: ${state.overNames[0].url} (${state.overNames[0].len}자)\n\n그래도 다운로드할까요?`);
+    if(!ok) return;
+  }
   const btn = document.getElementById('downloadBtn');
   const original = btn.textContent;
   btn.textContent = '파일 생성 중...';
@@ -975,7 +1024,7 @@ document.getElementById('downloadBtn').addEventListener('click', async ()=>{
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${state.dashFilename || 'dashboard'}_매칭결과.xlsx`;
+    a.download = resultFileName();
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
