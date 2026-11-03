@@ -360,10 +360,21 @@
     z-index:50;
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .diag{background:#fff;border:1px solid #e3e8e5;border-radius:14px;padding:18px 22px;margin:0 0 20px;font-size:13.5px;line-height:1.7;}
+  .diag h3{margin:0 0 6px;font-size:14px;}
+  .diag ul{margin:0;padding-left:18px;}
+  .diag .muted{color:#8a948f;font-size:12.5px;}
 </style>
 </head>
 <body>
 <div class="wrap">
+
+  <header class="top">
+    <div class="eyebrow">브랜드검색 소재 자동화</div>
+    <h1>브랜드검색 셋팅파일 URL 매칭 대시보드</h1>
+    <p class="lede">최종URL 파일과 소재 세팅 파일, 두 개를 올리면 소재명 규칙(기기·범용/보종·영역)에 맞춰
+      URL을 자동으로 매칭해요. 결과를 바로 확인하고, 매칭이 반영된 엑셀 파일을 다운로드할 수 있어요.</p>
+  </header>
 
   <section class="material-box">
     <div class="material-label">
@@ -394,7 +405,7 @@
       <span class="num">STEP 02</span>
       <div class="badge">2</div>
       <h3>소재 세팅 대시보드 파일</h3>
-      <p class="desc">PC/MO 시트의 G열에 영역명(홈링크·브랜드소식 등)이 적혀 있는 파일이에요.</p>
+      <p class="desc">PC/MO 시트의 D·E열에 영역명(홈링크·브랜드소식 등)이 적혀 있고, G열에 URL을 채울 파일이에요.</p>
       <label class="drop" id="drop2">
         ⬆ 파일을 끌어다 놓거나 클릭해서 선택
         <input type="file" id="file2" accept=".xlsx,.xls">
@@ -423,6 +434,8 @@
     <div class="card"><div class="label">처리 시간</div><div class="value" id="statTime">0ms</div></div>
   </section>
 
+  <section class="diag" id="diag" hidden></section>
+
   <div class="actions" id="actions" hidden>
     <button class="primary" id="downloadBtn">결과 파일 다운로드 (.xlsx)</button>
     <button class="ghost" id="resetBtn">다시 시작</button>
@@ -450,15 +463,16 @@
     같이 쓰는 다른 팀원도 이 링크를 열어 각자의 파일 2개로 바로 사용할 수 있어요.<br>
     <b>원본 보존</b> — 다운로드 파일은 원본 엑셀 파일의 압축 구조를 그대로 열어서 G열의 URL 셀만 딱 골라
     수정하는 방식이에요. 그 외 이미지, 표 서식, 다른 셀 값 등은 전혀 건드리지 않아서 원본 그대로 유지돼요.<br>
-    <b>영역 자리 판단 방식</b> — G열에 이미 적혀 있는 값(이전 URL이나 이전 결과)은 보지 않고, 각 블록의
-    정해진 순서(홈링크→브랜드소식→메인이미지→타이틀→…)를 기준으로 자리를 판단해요. 그래서 G열에 예전 URL이
-    남아있어도 먼저 지우고 새 URL로 다시 채워요.
+    <b>영역 자리 판단 방식</b> — 시트 이름의 PC/MO와 B열의 범용/보종으로 블록을 구분해요(구사명/신사명은 구분하지 않고, 띄어쓰기·줄바꿈·괄호도 상관없어요). 그다음
+    D·E열의 영역명(홈링크, 메인타이틀, 서브링크1, 썸네일1, 다이나믹 영역의 섬네일1 등)을 읽어 같은 행의 G열에 URL을 넣어요.
+    "섬네일/썸네일" 표기 차이도 같게 취급해요. G열에 예전 URL이 남아 있어도 새 URL로 덮어써요.
   </footer>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
+if(typeof XLSX==='undefined'||typeof JSZip==='undefined'){window.addEventListener('DOMContentLoaded',()=>{const l=document.getElementById('statusLine');if(l)l.textContent='엑셀 라이브러리를 불러오지 못했어요 — 인터넷 연결이나 사내 보안망에서 cdnjs.cloudflare.com 접속이 막혀 있는지 확인해 주세요';});}
 const state = { urlRows:null, wbDash:null, dashBuffer:null, matchLog:[], instructions:[], resultReady:false, dashFilename:null };
 
 function toast(msg){
@@ -468,77 +482,131 @@ function toast(msg){
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
+// ---- 텍스트 정규화: 띄어쓰기·줄바꿈 제거, "섬네일/썸네일" 표기 통일 ----
+function norm(v){
+  return String(v==null?'':v).replace(/\s+/g,'').replace(/섬네일/g,'썸네일').toLowerCase();
+}
+
+// 어떤 텍스트에서 범용/보종을 찾아냄 (구사명/신사명은 구분하지 않음)
+function detectGroup(text){
+  const t = norm(text);
+  return /범용/.test(t) ? '범용' : (/보종/.test(t) ? '보종' : null);
+}
+
+function detectDevice(text){
+  const t = norm(text);
+  if(/pc/.test(t)) return 'PC';
+  if(/mo|모바일|mobile/.test(t)) return 'MO';
+  return null;
+}
+
 function buildUrlMap(rows){
   const map = new Map();
+  const conflicts = [];
   rows.forEach(row=>{
     const name = row[0], url = row[1];
     if(!name || !url) return;
     const parts = String(name).split('_');
     if(parts.length < 3) return;
-    const device = /PC$/.test(parts[0]) ? 'PC' : 'MO';
-    const g1 = parts[1], g2 = parts[2];
-    const suffix = parts[parts.length-1];
-    map.set([device,g1,g2,suffix].join('|'), url);
+    const device = detectDevice(parts[0]);
+    const group = detectGroup(name);
+    if(!device || !group) return;
+    const suffix = norm(parts[parts.length-1]);
+    const key = [device, group, suffix].join('|');
+    const u = String(url).trim();
+    // 구사명/신사명을 구분하지 않으므로 같은 자리에 URL이 두 번 나올 수 있음 → 먼저 나온 URL을 사용
+    if(map.has(key)){
+      if(map.get(key) !== u) conflicts.push(`${device}_${group}_${parts[parts.length-1]}`);
+      return;
+    }
+    map.set(key, u);
   });
+  map.conflicts = conflicts;
   return map;
 }
 
-// 시트 구조상 "URL이 들어가야 하는 자리"가 항상 같은 순서로 반복되기 때문에,
-// G열에 이미 다른 값(이전 URL 등)이 들어있어도 이 순서를 기준으로 항상 다시 계산합니다.
-const AREA_TEMPLATES = {
-  PC: ['홈링크','브랜드소식','메인이미지','타이틀','서브링크1','서브링크2','썸네일1','썸네일2','썸네일3','다이나믹섬네일1','다이나믹섬네일2','다이나믹섬네일3','다이나믹섬네일4','다이나믹섬네일5'],
-  MO: ['홈링크','브랜드소식','메인이미지','타이틀','탭1-1','탭1-2','탭1-3','탭2-1','탭2-2','탭2-3','탭3-1','탭3-2','탭3-3']
-};
+// 한 행의 영역 표기(+현재 섹션)를 보고, 최종URL 파일에서 찾아볼 영역명 후보를 돌려줌.
+// required=true 인 자리는 URL이 없으면 "실패"로, false 인 자리는 URL이 있을 때만 채움.
+function slotFor(label, section, tab){
+  const L = norm(label);
+  if(!L) return null;
+  let m;
+  if(['홈링크','브랜드소식','메인이미지'].includes(L)) return {name:label, keys:[L], required:true};
+  if(m = L.match(/^서브링크(\d+)$/)) return {name:label, keys:[L], required:true};
+  if(L==='메인타이틀'){
+    if(section==='dynamic') return {name:'다이나믹 메인타이틀', keys:['다이나믹메인타이틀','다이나믹타이틀'], required:false};
+    return {name:label, keys:['타이틀','메인타이틀'], required:true};
+  }
+  if(L==='서브타이틀') return {name:label, keys:['서브타이틀','타이틀'], required:true};
+  if(L==='타이틀') return {name:label, keys:['타이틀'], required:false};
+  if(m = L.match(/^썸네일(\d+)$/)){
+    if(tab) return {name:`탭${tab}-${m[1]}`, keys:[`탭${tab}-${m[1]}`], required:true};
+    if(section==='dynamic') return {name:`다이나믹섬네일${m[1]}`, keys:[`다이나믹썸네일${m[1]}`], required:true};
+    return {name:label, keys:[L], required:true};
+  }
+  if(m = L.match(/^탭메뉴(\d+)$/)) return {name:label, keys:[`탭${m[1]}`,`탭메뉴${m[1]}`], required:false};
+  // 하단텍스트·설명문구·고지문구 등: 최종URL 파일에 같은 이름이 있을 때만 채움
+  return {name:label, keys:[L], required:false};
+}
 
-function processSheet(ws, sheetName, device, urlMap, matchLog, instructions){
-  if(!ws['!ref']) return 0;
+const cellVal = (ws, r, c) => { const cell = ws[XLSX.utils.encode_cell({r, c})]; return cell ? cell.v : null; };
+
+function processSheet(ws, sheetName, device, urlMap, matchLog, instructions, diag){
+  const info = {sheet:sheetName, device, blocks:[], skipped:[], slots:0};
+  diag.push(info);
+  if(!ws['!ref']) return;
   const range = XLSX.utils.decode_range(ws['!ref']);
-  const template = AREA_TEMPLATES[device];
 
-  // 1) B열 그룹 마커를 기준으로 블록을 나누고, I열(체크박스)이 있는 행 = "URL이 들어가야 하는 자리"로 수집
-  const blocks = [];
-  let current = null;
+  let block = null, section = 'main', tab = null, pendingSkip = null;
   for(let r=range.s.r; r<=range.e.r; r++){
-    const bCell = ws[XLSX.utils.encode_cell({r:r, c:1})]; // B열
-    if(bCell && bCell.v !== undefined && bCell.v !== null && String(bCell.v).trim() !== ''){
-      const bClean = String(bCell.v).replace(/[\r\n]+/g,'_');
-      const tokens = bClean.split(/[_(]/).filter(Boolean);
-      if(tokens.length >= 2 && (tokens[0]==='구사명'||tokens[0]==='신사명') && (tokens[1]==='범용'||tokens[1]==='보종')){
-        current = { group:[tokens[0], tokens[1]], rows:[] };
-        blocks.push(current);
+    // B열에 새 값이 나오면 블록이 바뀜. 범용/보종이 들어있으면 매칭 대상 블록.
+    const b = cellVal(ws, r, 1);
+    if(b!=null && String(b).trim()!==''){
+      const g = detectGroup(b);
+      if(g){
+        block = {group:g, label:String(b).replace(/\s+/g,' ').trim(), used:new Set(), slots:0};
+        info.blocks.push(block);
+      } else {
+        pendingSkip = /^그룹$/.test(norm(b)) ? null : String(b).replace(/\s+/g,' ').trim();
+        block = null;
       }
+      section = 'main'; tab = null;
     }
-    if(!current) continue;
-    const iCell = ws[XLSX.utils.encode_cell({r:r, c:8})]; // I열 (체크박스 = URL 입력 자리 표시)
-    if(iCell && typeof iCell.v === 'boolean'){
-      current.rows.push(r);
+    if(!block){
+      // 영역 표기(D·E열)가 딸린 블록인데 그룹 조건이 안 맞은 경우만 '건너뜀'으로 기록 (제목줄 등은 제외)
+      if(pendingSkip && (norm(cellVal(ws, r, 3)) || norm(cellVal(ws, r, 4)))){ info.skipped.push(pendingSkip); pendingSkip = null; }
+      continue;
+    }
+
+    const d = cellVal(ws, r, 3), e = cellVal(ws, r, 4);
+    const dn = norm(d);
+    if(dn){
+      if(/다이나믹/.test(dn)){ section='dynamic'; tab=null; }
+      else if(/메인영역/.test(dn)){ section='main'; tab=null; }
+      const tm = dn.match(/^탭콘텐츠(\d+)$/);
+      if(tm){ tab = tm[1]; }
+      else if(!/영역$/.test(dn)){ tab = null; } // 홈링크 등 일반 영역이 D열에 오면 탭 구간 종료
+    }
+    const label = (e!=null && String(e).trim()!=='') ? e : (/(영역|탭콘텐츠\d+)$/.test(dn) ? null : d);
+    const slot = slotFor(label, section, tab);
+    if(!slot) continue;
+
+    const gAddr = XLSX.utils.encode_cell({r, c:6});
+    const key = slot.keys.map(k=>[device, block.group, k].join('|'))
+                         .find(k => urlMap.has(k) && !block.used.has(k));
+    const where = `${device}_${block.group}`;
+    if(key){
+      block.used.add(key);
+      const url = urlMap.get(key);
+      instructions.push({sheet:sheetName, addr:gAddr, action:'set', value:url});
+      matchLog.push({type:'url', sheet:sheetName, cell:gAddr, label:`${where} · ${slot.name}`, url, ok:true});
+      block.slots++; info.slots++;
+    } else if(slot.required){
+      instructions.push({sheet:sheetName, addr:gAddr, action:'clear'});
+      matchLog.push({type:'url', sheet:sheetName, cell:gAddr, label:`${where} · ${slot.name}`, url:null, ok:false});
+      block.slots++; info.slots++;
     }
   }
-
-  // 2) 블록마다 정해진 순서(template)에 맞춰 "지우고 새로 채우기" 지시 목록만 생성 (원본 파일은 여기서 건드리지 않음)
-  let filled = 0;
-  blocks.forEach(block=>{
-    block.rows.forEach((r, idx)=>{
-      const gAddr = XLSX.utils.encode_cell({r:r, c:6}); // G열
-      if(idx >= template.length){
-        instructions.push({sheet:sheetName, addr:gAddr, action:'clear'});
-        matchLog.push({type:'url', sheet:sheetName, cell:gAddr, label:'(구조 불일치: 예상 밖 행)', url:null, ok:false});
-        return;
-      }
-      const suffix = template[idx];
-      const key = [device, block.group[0], block.group[1], suffix].join('|');
-      if(urlMap.has(key)){
-        const url = urlMap.get(key);
-        instructions.push({sheet:sheetName, addr:gAddr, action:'set', value:url});
-        matchLog.push({type:'url', sheet:sheetName, cell:gAddr, label:suffix, url, ok:true});
-        filled++;
-      } else {
-        instructions.push({sheet:sheetName, addr:gAddr, action:'clear'});
-        matchLog.push({type:'url', sheet:sheetName, cell:gAddr, label:suffix, url:null, ok:false});
-      }
-    });
-  });
-  return filled;
 }
 
 const MATERIAL_SHEET_NAME = '소재 세팅 분배';
@@ -674,13 +742,17 @@ function runMatching(){
   const instructions = [];
   const wb = state.wbDash;
 
+  const diag = [];
+  const devicesInUrl = new Set(Array.from(urlMap.keys()).map(k=>k.split('|')[0]));
   wb.SheetNames.forEach(name=>{
-    let device = null;
-    if(/^PC/i.test(name)) device = 'PC';
-    else if(/^MO/i.test(name)) device = 'MO';
-    if(!device) return;
-    processSheet(wb.Sheets[name], name, device, urlMap, matchLog, instructions);
+    if(name===MATERIAL_SHEET_NAME) return;
+    const device = detectDevice(name);
+    if(!device){ diag.push({sheet:name, note:'시트 이름에 PC/MO가 없어 건너뛰었어요'}); return; }
+    if(!devicesInUrl.has(device)){ diag.push({sheet:name, note:`최종URL 파일에 ${device} URL이 없어 건너뛰었어요 (기존 값 유지)`}); return; }
+    processSheet(wb.Sheets[name], name, device, urlMap, matchLog, instructions, diag);
   });
+  state.diag = diag;
+  renderDiag(diag, urlMap.size, urlMap.conflicts);
 
   const materialName = document.getElementById('materialInput').value.trim();
   buildMaterialInstructions(wb, materialName, matchLog, instructions);
@@ -717,6 +789,23 @@ function runMatching(){
   toast(toastMsg);
 }
 
+function renderDiag(diag, urlCount, conflicts){
+  const box = document.getElementById('diag');
+  const lines = [`<li>최종URL 파일에서 읽은 URL: <b>${urlCount}개</b>${urlCount===0?' — A열 소재명에 PC/MO와 범용/보종이 들어있는지 확인해 주세요':''}</li>`];
+  if(conflicts && conflicts.length){
+    lines.push(`<li><b>주의</b>: 최종URL 파일에 같은 자리(기기·범용/보종·영역)인데 URL이 서로 다른 행이 ${conflicts.length}개 있어요. 먼저 나온 URL을 사용했어요.<br><span class="muted">${conflicts.slice(0,8).join(', ')}${conflicts.length>8?' 외':''}</span></li>`);
+  }
+  diag.forEach(d=>{
+    if(d.note){ lines.push(`<li><b>${d.sheet}</b>: ${d.note}</li>`); return; }
+    const bl = d.blocks.map(b=>`${b.label}(${b.slots}칸)`).join(', ') || '인식된 블록 없음 — B열에 범용/보종 표기가 있는지 확인해 주세요';
+    let t = `<li><b>${d.sheet}</b> (${d.device}): ${bl}`;
+    if(d.skipped.length) t += `<br><span class="muted">매칭 대상이 아니라 건너뛴 블록: ${d.skipped.join(', ')}</span>`;
+    lines.push(t + '</li>');
+  });
+  box.innerHTML = `<h3>시트별 인식 결과</h3><ul>${lines.join('')}</ul>`;
+  box.hidden = false;
+}
+
 function renderTable(filter){
   const tbody = document.getElementById('tbody');
   const rows = state.matchLog.filter(m => filter==='all' ? true : (filter==='ok' ? m.ok : !m.ok));
@@ -747,12 +836,16 @@ document.querySelectorAll('.filters button').forEach(btn=>{
 function wireDrop(dropId, inputId, handler){
   const drop = document.getElementById(dropId);
   const input = document.getElementById(inputId);
-  input.addEventListener('change', e=>{ if(e.target.files[0]) handler(e.target.files[0]); });
+  const run = async f => {
+    try{ await handler(f); }
+    catch(err){ console.error(err); toast('파일을 읽지 못했어요: ' + (err && err.message ? err.message : err)); }
+  };
+  input.addEventListener('change', e=>{ if(e.target.files[0]) run(e.target.files[0]); e.target.value=''; });
   drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('drag'); });
   drop.addEventListener('dragleave', ()=> drop.classList.remove('drag'));
   drop.addEventListener('drop', e=>{
     e.preventDefault(); drop.classList.remove('drag');
-    if(e.dataTransfer.files[0]) handler(e.dataTransfer.files[0]);
+    if(e.dataTransfer.files[0]) run(e.dataTransfer.files[0]);
   });
 }
 wireDrop('drop1','file1',handleFile1);
