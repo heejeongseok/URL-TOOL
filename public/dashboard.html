@@ -535,8 +535,11 @@ function slotFor(label, section, tab){
   if(m = L.match(/^서브링크(\d+)$/)) return {name:label, keys:[L], required:true};
   if(L==='메인타이틀'){
     if(section==='dynamic') return {name:'다이나믹 메인타이틀', keys:['다이나믹메인타이틀','다이나믹타이틀'], required:false};
-    return {name:label, keys:['타이틀','메인타이틀'], required:true};
+    // PC 메인타이틀은 URL 자리가 아님(타이틀 URL은 하단텍스트 행에 들어감). 최종URL 파일에 '메인타이틀'이 따로 있을 때만 채움
+    return {name:label, keys:['메인타이틀'], required:false};
   }
+  // PC: 최종URL 파일의 '타이틀' URL이 들어가는 자리
+  if(L==='하단텍스트') return {name:label, keys:['하단텍스트','타이틀'], required:true};
   if(L==='서브타이틀') return {name:label, keys:['서브타이틀','타이틀'], required:true};
   if(L==='타이틀') return {name:label, keys:['타이틀'], required:false};
   if(m = L.match(/^썸네일(\d+)$/)){
@@ -654,6 +657,11 @@ function buildMaterialInstructions(wb, newName, matchLog, instructions){
     if(jCell && jCell.v!==undefined && jCell.v!==null){
       let s = String(jCell.v);
       if(s.includes(oldMat)) s = s.split(oldMat).join(newName);
+      else {
+        // J열 소재명이 I열과 다르게 남아 있는 경우(예: 이전 소재명) → 형식 "구분_자동차_템플릿_소재명_..._MMDD"의 4번째 칸을 교체
+        const parts = s.split('_');
+        if(parts.length >= 5 && !parts[3].includes(newName)) { parts[3] = newName; s = parts.join('_'); }
+      }
       s = s.replace(/_(\d{2})(\d{2})$/, '_' + mmdd); // 맨 뒤 날짜(MMDD)를 오늘 날짜로
       newJ = s;
       instructions.push({sheet:MATERIAL_SHEET_NAME, addr:jAddr, action:'set', value:s});
